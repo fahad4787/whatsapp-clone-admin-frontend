@@ -1,4 +1,4 @@
-import { mockStats } from "@/lib/mock";
+import { mockStats } from "@/data";
 
 export const dashboardStats = [
   { label: "Registered users", value: `${mockStats.registeredUsers}`, delta: "+555% vs last week" },

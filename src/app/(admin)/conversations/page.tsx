@@ -1,6 +1,6 @@
-import { ResourcePage } from "@/components/data/ResourcePage";
-import { conversationsResource } from "@/lib/resources";
+import { ResourcePage } from "@/components/data";
+import { conversationsSpec } from "@/features/resources";
 
-export default function ConversationsPage() {
-  return <ResourcePage {...conversationsResource} />;
+export default function Page() {
+  return <ResourcePage spec={conversationsSpec} />;
 }

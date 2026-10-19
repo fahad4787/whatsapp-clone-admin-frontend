@@ -1,6 +1,6 @@
-import { ResourcePage } from "@/components/data/ResourcePage";
-import { otpsResource } from "@/lib/resources";
+import { ResourcePage } from "@/components/data";
+import { otpsSpec } from "@/features/resources";
 
-export default function OtpsPage() {
-  return <ResourcePage {...otpsResource} />;
+export default function Page() {
+  return <ResourcePage spec={otpsSpec} />;
 }

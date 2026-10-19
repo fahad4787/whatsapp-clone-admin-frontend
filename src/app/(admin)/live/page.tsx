@@ -1,6 +1,6 @@
-import { ResourcePage } from "@/components/data/ResourcePage";
-import { liveResource } from "@/lib/resources";
+import { ResourcePage } from "@/components/data";
+import { liveSpec } from "@/features/resources";
 
-export default function LivePage() {
-  return <ResourcePage {...liveResource} />;
+export default function Page() {
+  return <ResourcePage spec={liveSpec} />;
 }

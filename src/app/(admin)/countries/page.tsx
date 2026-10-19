@@ -1,6 +1,6 @@
-import { ResourcePage } from "@/components/data/ResourcePage";
-import { countriesResource } from "@/lib/resources";
+import { ResourcePage } from "@/components/data";
+import { countriesSpec } from "@/features/resources";
 
-export default function CountriesPage() {
-  return <ResourcePage {...countriesResource} />;
+export default function Page() {
+  return <ResourcePage spec={countriesSpec} />;
 }

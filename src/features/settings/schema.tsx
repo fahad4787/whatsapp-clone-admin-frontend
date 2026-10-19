@@ -1,29 +1,12 @@
 import type { ReactNode } from "react";
-import { FormField, NumberInput, TextInput, ToggleRow } from "@/components/ui/primitives";
-import { mockSettings } from "@/lib/mock";
+import { FormField, NumberInput, TextInput, ToggleRow } from "@/components/ui";
+import type { SettingsMap } from "@/types/models";
 
 type Field =
-  | {
-      type: "number";
-      key: keyof typeof mockSettings;
-      label: string;
-      hint?: string;
-    }
-  | {
-      type: "text";
-      key: keyof typeof mockSettings;
-      label: string;
-      hint?: string;
-    }
-  | {
-      type: "toggle";
-      key: keyof typeof mockSettings;
-      label: string;
-    }
-  | {
-      type: "note";
-      text: string;
-    };
+  | { type: "number"; key: keyof SettingsMap; label: string; hint?: string }
+  | { type: "text"; key: keyof SettingsMap; label: string; hint?: string }
+  | { type: "toggle"; key: keyof SettingsMap; label: string }
+  | { type: "note"; text: string };
 
 export type SettingsSection = {
   title: string;
@@ -56,9 +39,7 @@ export const settingsSections: SettingsSection[] = [
   },
   {
     title: "Groups",
-    fields: [
-      { type: "number", key: "maxGroupSize", label: "Maximum group size (members)", hint: "Allowed: 2–1024" },
-    ],
+    fields: [{ type: "number", key: "maxGroupSize", label: "Maximum group size (members)", hint: "Allowed: 2–1024" }],
   },
   {
     title: "Media",
@@ -86,10 +67,7 @@ export const settingsSections: SettingsSection[] = [
     title: "SMS",
     fields: [
       { type: "toggle", key: "smsEnabled", label: "Send sign-in codes by SMS" },
-      {
-        type: "note",
-        text: "Until this is switched on, a code is only readable from the OTP log.",
-      },
+      { type: "note", text: "Until this is switched on, a code is only readable from the OTP log." },
     ],
   },
   {
@@ -106,7 +84,11 @@ export const settingsSections: SettingsSection[] = [
   },
 ];
 
-export function renderSettingsField(field: Field, values: typeof mockSettings): ReactNode {
+export function renderSettingsField(
+  field: Field,
+  values: SettingsMap,
+  onChange: (key: keyof SettingsMap, value: string | number | boolean) => void,
+): ReactNode {
   if (field.type === "note") {
     return (
       <p key={field.text} className="text-sm text-bp-muted sm:col-span-3">
@@ -120,7 +102,8 @@ export function renderSettingsField(field: Field, values: typeof mockSettings): 
       <ToggleRow
         key={field.key}
         label={field.label}
-        defaultChecked={Boolean(values[field.key])}
+        checked={Boolean(values[field.key])}
+        onChange={(on) => onChange(field.key, on)}
       />
     );
   }
@@ -129,9 +112,12 @@ export function renderSettingsField(field: Field, values: typeof mockSettings): 
   return (
     <FormField key={field.key} label={field.label} hint={field.hint}>
       {field.type === "number" ? (
-        <NumberInput defaultValue={Number(value)} />
+        <NumberInput
+          value={Number(value)}
+          onChange={(e) => onChange(field.key, Number(e.target.value))}
+        />
       ) : (
-        <TextInput defaultValue={String(value)} />
+        <TextInput value={String(value)} onChange={(e) => onChange(field.key, e.target.value)} />
       )}
     </FormField>
   );

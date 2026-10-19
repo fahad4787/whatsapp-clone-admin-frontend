@@ -1,6 +1,6 @@
-import { ResourcePage } from "@/components/data/ResourcePage";
-import { callsResource } from "@/lib/resources";
+import { ResourcePage } from "@/components/data";
+import { callsSpec } from "@/features/resources";
 
-export default function CallsPage() {
-  return <ResourcePage {...callsResource} />;
+export default function Page() {
+  return <ResourcePage spec={callsSpec} />;
 }

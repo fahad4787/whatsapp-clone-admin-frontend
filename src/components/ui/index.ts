@@ -1,8 +1,8 @@
-/** @deprecated Import from `@/components/ui/primitives` instead. */
 export {
   Avatar,
   Button,
   EmptyState,
+  FilterChip,
   FormField,
   FormSection,
   InfoBanner,
@@ -14,4 +14,6 @@ export {
   StatusBadge,
   TextInput,
   ToggleRow,
-} from "@/components/ui/primitives";
+} from "./primitives";
+export { Modal } from "./Modal";
+export { RowActions, type RowAction } from "./RowActions";

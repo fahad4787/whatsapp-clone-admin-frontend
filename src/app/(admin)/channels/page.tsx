@@ -1,6 +1,6 @@
-import { ResourcePage } from "@/components/data/ResourcePage";
-import { channelsResource } from "@/lib/resources";
+import { ResourcePage } from "@/components/data";
+import { channelsSpec } from "@/features/resources";
 
-export default function ChannelsPage() {
-  return <ResourcePage {...channelsResource} />;
+export default function Page() {
+  return <ResourcePage spec={channelsSpec} />;
 }

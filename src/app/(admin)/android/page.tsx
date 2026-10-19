@@ -1,43 +1,75 @@
-import { Button, PageHeader } from "@/components/ui/primitives";
-import { mockSettings } from "@/lib/mock";
+"use client";
 
-const meta = [
-  { label: "Latest version", value: mockSettings.latestAndroidVersion },
-  { label: "Version code", value: String(mockSettings.latestAndroidVersionCode) },
-  { label: "Download URL", value: mockSettings.downloadUrl, accent: true, span: true },
-];
+import { useState } from "react";
+import { Button, PageHeader, TextInput } from "@/components/ui";
+import { useMockStore } from "@/data";
 
 export default function AndroidPage() {
+  const store = useMockStore();
+  const [version, setVersion] = useState("");
+  const [notes, setNotes] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
+
+  function publish() {
+    const nextVersion = version.trim() || store.settings.latestAndroidVersion;
+    const nextCode = store.settings.latestAndroidVersionCode + 1;
+    store.setSettings({
+      ...store.settings,
+      latestAndroidVersion: nextVersion,
+      latestAndroidVersionCode: nextCode,
+    });
+    store.pushAudit("Published Android build", `${nextVersion} · ${notes || "no notes"}`);
+    setToast(`Published ${nextVersion} (code ${nextCode})`);
+    setVersion("");
+    setNotes("");
+    window.setTimeout(() => setToast(null), 2000);
+  }
+
+  function flashFile() {
+    setToast("Mock browse — pick an APK in the real build");
+    window.setTimeout(() => setToast(null), 1600);
+  }
+
+  const s = store.settings;
+
   return (
-    <div>
-      <PageHeader title="Android app" />
+    <div className="bp-page">
+      <PageHeader title="Android app" description="Publish builds and QR install links for phones." />
+      {toast ? (
+        <div className="mb-4 rounded-[var(--radius-sm)] border border-emerald-200 bg-bp-green-soft px-4 py-2.5 text-sm font-medium">
+          {toast}
+        </div>
+      ) : null}
       <div className="bp-card p-5">
-        <p className="mb-4 text-sm text-bp-muted">
-          Upload a new APK to publish builds and QR install links for phones.
-        </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-semibold">
             Version (optional)
-            <input className="bp-input mt-1" placeholder="from APK" />
+            <TextInput className="mt-1.5" placeholder="from APK" value={version} onChange={(e) => setVersion(e.target.value)} />
           </label>
           <label className="text-sm font-semibold">
             Notes (optional)
-            <input className="bp-input mt-1" placeholder="What changed" />
+            <TextInput className="mt-1.5" placeholder="What changed" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </label>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button variant="secondary">Browse…</Button>
-          <Button variant="primary" disabled>
-            Upload APK
+          <Button variant="secondary" onClick={() => flashFile()}>
+            Browse…
           </Button>
+          <Button onClick={publish}>Upload APK</Button>
         </div>
         <dl className="mt-6 grid gap-2 text-sm sm:grid-cols-2">
-          {meta.map((item) => (
-            <div key={item.label} className={item.span ? "sm:col-span-2" : undefined}>
-              <dt className="text-bp-muted">{item.label}</dt>
-              <dd className={`font-semibold ${item.accent ? "text-bp-green" : ""}`}>{item.value}</dd>
-            </div>
-          ))}
+          <div>
+            <dt className="text-bp-muted">Latest version</dt>
+            <dd className="font-semibold">{s.latestAndroidVersion}</dd>
+          </div>
+          <div>
+            <dt className="text-bp-muted">Version code</dt>
+            <dd className="font-semibold">{s.latestAndroidVersionCode}</dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-bp-muted">Download URL</dt>
+            <dd className="font-semibold text-bp-green">{s.downloadUrl}</dd>
+          </div>
         </dl>
       </div>
     </div>

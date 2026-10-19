@@ -11,25 +11,18 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { PageHeader, StatusBadge } from "@/components/ui/primitives";
-import {
-  chartData,
-  chartSpecs,
-  dashboardStats,
-  last24hRows,
-  liveMetrics,
-  type ChartSpec,
-} from "@/lib/dashboard";
-import { mockOtps } from "@/lib/mock";
+import { PageHeader, StatusBadge } from "@/components/ui";
+import { chartData, chartSpecs, type ChartSpec } from "@/features/dashboard";
+import { useMockStore } from "@/data";
 
 function StatCard({ label, value, delta }: { label: string; value: string; delta?: string }) {
   const up = delta?.startsWith("+");
   return (
-    <div className="bp-card p-4">
-      <div className="text-sm text-bp-muted">{label}</div>
-      <div className="mt-1 text-2xl font-bold">{value}</div>
+    <div className="bp-card p-5">
+      <div className="text-[13px] font-medium text-bp-muted">{label}</div>
+      <div className="mt-1.5 text-[1.65rem] font-extrabold tracking-tight text-bp-ink">{value}</div>
       {delta ? (
-        <div className={`mt-1 text-xs font-medium ${up ? "text-bp-green" : "text-bp-muted"}`}>{delta}</div>
+        <div className={`mt-1.5 text-xs font-semibold ${up ? "text-bp-green" : "text-bp-muted"}`}>{delta}</div>
       ) : null}
     </div>
   );
@@ -38,8 +31,11 @@ function StatCard({ label, value, delta }: { label: string; value: string; delta
 function LiveDot({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="h-2 w-2 rounded-full bg-bp-green" />
-      <strong>{value}</strong>
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-bp-green opacity-40" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-bp-green" />
+      </span>
+      <strong className="tabular-nums">{value}</strong>
       <span className="text-bp-muted">{label}</span>
     </div>
   );
@@ -47,10 +43,10 @@ function LiveDot({ label, value }: { label: string; value: number }) {
 
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bp-card p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        <span className="text-xs text-bp-muted">last 30 days</span>
+    <div className="bp-card p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-bold tracking-tight">{title}</h2>
+        <span className="text-[11px] font-medium text-bp-muted">Last 30 days</span>
       </div>
       {children}
     </div>
@@ -84,18 +80,57 @@ function DashboardChart({ spec }: { spec: ChartSpec }) {
 }
 
 export default function DashboardPage() {
+  const store = useMockStore();
+  const activeUsers = store.users.filter((u) => u.status === "Active").length;
+  const openReports = store.reports.filter((r) => r.status === "Open").length;
+  const pendingOtps = store.otps.filter((o) => o.status === "Pending").length;
+  const usedOtps = store.otps.filter((o) => o.status === "Used").length;
+  const liveRooms = store.live.length;
+  const completedCalls = store.calls.filter((c) => c.outcome === "Completed").length;
+
+  const stats = [
+    { label: "Registered users", value: `${store.users.length}`, delta: "+555% vs last week" },
+    { label: "Active today", value: `${activeUsers}` },
+    { label: "Messages this week", value: `${store.conversations.reduce((n, c) => n + c.messages, 0)}`, delta: "-54% vs last week" },
+    {
+      label: "Call minutes this week",
+      value: `${completedCalls * 4} min`,
+      delta: "-51% vs last week",
+    },
+  ];
+
+  const live = [
+    { label: "Online users", value: activeUsers },
+    { label: "Open connections", value: store.conversations.length },
+    { label: "Active calls", value: liveRooms },
+    { label: "LiveKit rooms", value: liveRooms },
+  ];
+
+  const last24h = [
+    { k: "OTP requests", v: store.otps.length },
+    { k: "OTP lockouts", v: store.otps.filter((o) => o.status === "Failed").length },
+    { k: "Pushes sent", v: usedOtps + pendingOtps },
+    { k: "Pushes failed", v: store.otps.filter((o) => o.status === "Failed").length },
+    { k: "Open reports", v: openReports, accent: true },
+  ];
+
+  const recentOtps = store.otps.slice(0, 6);
+
   return (
-    <div>
-      <PageHeader title="Dashboard" />
+    <div className="bp-page">
+      <PageHeader
+        title="Dashboard"
+        description="Live snapshot of sign-ups, messaging, and calls across Bolta Punjab."
+      />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {dashboardStats.map((s) => (
+        {stats.map((s) => (
           <StatCard key={s.label} {...s} />
         ))}
       </div>
 
       <div className="bp-card mt-3 flex flex-wrap gap-6 px-4 py-3 text-sm" aria-label="Live">
-        {liveMetrics.map((m) => (
+        {live.map((m) => (
           <LiveDot key={m.label} {...m} />
         ))}
       </div>
@@ -110,7 +145,7 @@ export default function DashboardPage() {
         <div className="bp-card p-4">
           <h2 className="mb-3 text-base font-semibold">Last 24 hours</h2>
           <dl className="space-y-2 text-sm">
-            {last24hRows.map((row) => (
+            {last24h.map((row) => (
               <div
                 key={row.k}
                 className="flex justify-between border-b border-slate-100 py-1.5 last:border-0"
@@ -133,8 +168,8 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {mockOtps.map((o) => (
-                <tr key={`${o.time}-${o.phone}`}>
+              {recentOtps.map((o) => (
+                <tr key={o.id}>
                   <td>{o.time}</td>
                   <td className="text-bp-green">{o.phone}</td>
                   <td>

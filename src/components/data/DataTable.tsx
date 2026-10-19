@@ -1,3 +1,5 @@
+"use client";
+
 import type { ReactNode } from "react";
 
 export type Column<T> = {
@@ -12,43 +14,86 @@ type DataTableProps<T> = {
   rows: T[];
   rowKey: (row: T) => string;
   selectable?: boolean;
+  selected?: Set<string>;
+  onSelectedChange?: (next: Set<string>) => void;
 };
 
-export function DataTable<T>({ columns, rows, rowKey, selectable }: DataTableProps<T>) {
+export function DataTable<T>({
+  columns,
+  rows,
+  rowKey,
+  selectable,
+  selected,
+  onSelectedChange,
+}: DataTableProps<T>) {
+  const allIds = rows.map(rowKey);
+  const allSelected = selectable && selected && allIds.length > 0 && allIds.every((id) => selected.has(id));
+
+  function toggleAll() {
+    if (!onSelectedChange || !selected) return;
+    if (allSelected) onSelectedChange(new Set());
+    else onSelectedChange(new Set(allIds));
+  }
+
+  function toggleOne(id: string) {
+    if (!onSelectedChange || !selected) return;
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onSelectedChange(next);
+  }
+
   return (
     <div className="bp-card overflow-hidden">
-      <table className="bp-table">
-        <thead>
-          <tr>
-            {selectable ? (
-              <th>
-                <input type="checkbox" aria-label="Select all" />
-              </th>
-            ) : null}
-            {columns.map((col) => (
-              <th key={col.id} className={col.className}>
-                {col.header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={rowKey(row)}>
+      <div className="overflow-x-auto">
+        <table className="bp-table">
+          <thead>
+            <tr>
               {selectable ? (
-                <td>
-                  <input type="checkbox" aria-label="Select row" />
-                </td>
+                <th className="w-12">
+                  <input
+                    type="checkbox"
+                    className="bp-check"
+                    aria-label="Select all"
+                    checked={Boolean(allSelected)}
+                    onChange={toggleAll}
+                  />
+                </th>
               ) : null}
               {columns.map((col) => (
-                <td key={col.id} className={col.className}>
-                  {col.cell(row)}
-                </td>
+                <th key={col.id} className={col.className}>
+                  {col.header}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const id = rowKey(row);
+              return (
+                <tr key={id}>
+                  {selectable ? (
+                    <td>
+                      <input
+                        type="checkbox"
+                        className="bp-check"
+                        aria-label="Select row"
+                        checked={Boolean(selected?.has(id))}
+                        onChange={() => toggleOne(id)}
+                      />
+                    </td>
+                  ) : null}
+                  {columns.map((col) => (
+                    <td key={col.id} className={col.className}>
+                      {col.cell(row)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
