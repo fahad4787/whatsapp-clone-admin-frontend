@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bolta Punjab Admin (Dev)
 
-## Getting Started
+Next.js admin console matched to the live [Bolta Punjab Admin](https://wa.zirvik.com/admin) UI, polished with **Soft UI Evolution** + Bolta green.
 
-First, run the development server:
+## Skills installed
+
+| Skill | Where |
+|-------|--------|
+| [ui-ux-pro-max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) | `~/.cursor/skills/` + `.cursor/skills/` |
+| graphify | linked in `.cursor/skills/` |
+| vercel-react-best-practices | linked |
+| web-design-guidelines | linked |
+| frontend-design | linked |
+
+See `design-system.md` and `.cursor/rules/admin-ui.mdc`.
+
+## Run
 
 ```bash
+cd bolta-punjab-admin
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000/login](http://localhost:3000/login). Mock sign-in accepts any email/password (session in `localStorage` only).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Routes (same as live)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Path | Page |
+|------|------|
+| `/login` | Admin login + APK QR card |
+| `/` | Dashboard |
+| `/users` | Users |
+| `/otps` | OTP log |
+| `/conversations` | Conversations |
+| `/live` | Live calls |
+| `/calls` | Call history |
+| `/reports` | Reports |
+| `/countries` | Countries |
+| `/settings` | Settings |
+| `/legal` | Legal |
+| `/android` | Android app |
+| `/stickers` | Stickers |
+| `/channels` | Channels |
+| `/admins` | Admin users |
+| `/audit` | Audit log |
+| `/security` | Security |
+| `/firewall` | IP access |
 
-## Learn More
+## Reference screenshots
 
-To learn more about Next.js, take a look at the following resources:
+Captured from the live admin (read-only): `reference-screenshots/`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Security
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Do not** commit live admin passwords or SMS/email secrets into this repo.
+- Browser password saving is fine for your local browser; keep secrets out of git.
+- Backend wiring comes next — this UI currently uses mock data in `src/lib/mock.ts`.
 
-## Deploy on Vercel
+## Next steps
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Build API that serves these admin screens.
+2. Point the Android Dev app (`com.boltapunjab.app.dev`) at that API.
