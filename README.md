@@ -47,10 +47,6 @@ Open [http://localhost:3000/login](http://localhost:3000/login). Mock sign-in ac
 | `/security` | Security |
 | `/firewall` | IP access |
 
-## Reference screenshots
-
-Captured from the live admin (read-only): `reference-screenshots/`.
-
 ## Security
 
 - **Do not** commit live admin passwords or SMS/email secrets into this repo.
