@@ -1,13 +1,13 @@
-# Bolta Punjab Admin (Dev)
+# Aivora Admin (Dev)
 
-Next.js 15 admin console for Bolta Punjab — Soft UI + brand green, config-driven list pages, mock data until the API is wired.
+Next.js 15 admin console for Aivora — Soft UI + brand green, config-driven list pages, mock data until the API is wired.
 
 ## Knowledge graph
 
 Architecture questions should go through **graphify** (not blind search):
 
 ```bash
-cd bolta-punjab-admin
+cd aivora-admin
 graphify query "How does ResourcePage connect to list pages?"
 open graphify-out/graph.html   # interactive map
 ```
@@ -44,7 +44,7 @@ src/
 ## Run
 
 ```bash
-cd bolta-punjab-admin
+cd aivora-admin
 npm install
 npm run dev
 ```
@@ -83,4 +83,4 @@ Open [http://localhost:3000/login](http://localhost:3000/login). Mock sign-in ac
 ## Next steps
 
 1. Replace `data/mock` with API clients.
-2. Point the Android Dev app (`com.boltapunjab.app.dev`) at that API.
+2. Point the Android Dev app (`com.aivora.app.dev`) at that API.

@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { PanelLeft, Smartphone, X } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { AivoraLogo } from "@/components/brand";
 import { STORAGE_KEYS } from "@/config/constants";
 
 type ShellCtx = {
@@ -127,10 +128,13 @@ export function AdminShell({ children }: { children: ReactNode }) {
               >
                 <PanelLeft size={18} />
               </button>
-              <div className="hidden text-[13px] sm:block">
-                <span className="font-semibold text-bp-ink">Admin</span>
-                <span className="mx-1.5 text-bp-border">/</span>
-                <span className="text-bp-muted">Console</span>
+              <div className="hidden items-center gap-2 sm:flex">
+                <AivoraLogo size={22} animated={false} />
+                <div className="text-[13px]">
+                  <span className="font-semibold text-bp-ink">Admin</span>
+                  <span className="mx-1.5 text-bp-border">/</span>
+                  <span className="text-bp-muted">Console</span>
+                </div>
               </div>
             </div>
             <Link href="/android" className="bp-icon-btn" aria-label="Android app" title="Android app">

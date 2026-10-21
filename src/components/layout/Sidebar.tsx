@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { NAV_GROUPS, type NavItem } from "@/config/nav";
 import { useAdminShell } from "@/components/layout/AdminShell";
+import { AivoraBrand } from "@/components/brand";
 
 const ICONS: Record<
   NavItem["icon"],
@@ -71,19 +72,11 @@ export function Sidebar({ forceExpanded, onNavigate }: SidebarProps) {
     >
       <div className={`shrink-0 ${collapsed ? "px-2 pt-3.5 pb-3.5" : "px-3.5 pt-3.5 pb-3.5"}`}>
         <div
-          className={`flex items-center gap-3 rounded-[var(--radius)] border border-[#cfdad3] bg-[#eef5f0] ${
+          className={`flex items-center rounded-[var(--radius)] border border-[#cfdad3] bg-[#eef5f0] ${
             collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5"
           }`}
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-[#1db866] to-bp-green-dark text-[13px] font-extrabold tracking-tight text-white shadow-[0_8px_18px_rgba(18,154,85,0.32)]">
-            BP
-          </div>
-          {!collapsed ? (
-            <div className="min-w-0">
-              <div className="truncate text-[14px] font-extrabold tracking-tight text-bp-ink">Bolta Punjab</div>
-              <div className="text-[10px] font-bold tracking-[0.08em] text-bp-muted uppercase">Admin · Dev</div>
-            </div>
-          ) : null}
+          <AivoraBrand size={36} subtitle="Admin · Dev" collapsed={collapsed} />
         </div>
       </div>
 

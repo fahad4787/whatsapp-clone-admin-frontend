@@ -41,19 +41,19 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 pt-[8vh] pb-10 sm:pt-[10vh]"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="bp-modal-title"
     >
       <button
         type="button"
-        className="fixed inset-0 bg-[#0c1612]/45 backdrop-blur-[3px]"
+        className="absolute inset-0 bg-[#0c1612]/45 backdrop-blur-[3px]"
         aria-label="Close"
         onClick={onClose}
       />
       <div
-        className={`relative w-full ${width} animate-[bp-modal-in_160ms_ease-out] rounded-[var(--radius)] border border-bp-border bg-white shadow-[0_20px_50px_rgba(12,22,18,0.18)]`}
+        className={`relative my-auto w-full ${width} animate-[bp-modal-in_160ms_ease-out] rounded-[var(--radius)] border border-bp-border bg-white shadow-[0_20px_50px_rgba(12,22,18,0.18)]`}
       >
         <div className="flex items-start justify-between gap-4 border-b border-bp-border px-5 py-4 sm:px-6">
           <div className="min-w-0">

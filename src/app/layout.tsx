@@ -17,8 +17,12 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bolta Punjab Admin",
-  description: "Admin console for Bolta Punjab (Dev)",
+  title: "Aivora Admin",
+  description: "Admin console for Aivora (Dev)",
+  icons: {
+    icon: [{ url: "/aivora-mark.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/aivora-mark.svg" }],
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

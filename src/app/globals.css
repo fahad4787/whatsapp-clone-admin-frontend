@@ -44,6 +44,126 @@
   }
 }
 
+/* Aivora animated brand mark */
+.aivora-logo {
+  border-radius: 14px;
+  line-height: 0;
+  overflow: hidden;
+}
+
+.aivora-logo svg {
+  display: block;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .aivora-logo--live .aivora-logo__sweep {
+    animation: aivora-sweep 3.2s ease-in-out infinite;
+  }
+
+  .aivora-logo--live .aivora-logo__link {
+    animation: aivora-link 2.2s ease-in-out infinite;
+  }
+
+  .aivora-logo--live .aivora-logo__chat {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: aivora-float-chat 2.8s ease-in-out infinite;
+  }
+
+  .aivora-logo--live .aivora-logo__call {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: aivora-float-call 2.8s ease-in-out infinite;
+  }
+
+  .aivora-logo--live .aivora-logo__handset {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: aivora-handset 2.6s ease-in-out infinite;
+  }
+
+  .aivora-logo--live .aivora-logo__chat-dot {
+    animation: aivora-chat-dot 1.2s ease-in-out infinite;
+  }
+
+  .aivora-logo--live .aivora-logo__chat-dot--2 {
+    animation-delay: 0.15s;
+  }
+
+  .aivora-logo--live .aivora-logo__chat-dot--3 {
+    animation-delay: 0.3s;
+  }
+}
+
+@keyframes aivora-sweep {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.55;
+  }
+  55% {
+    opacity: 0.35;
+  }
+  100% {
+    transform: translateX(58px);
+    opacity: 0;
+  }
+}
+
+@keyframes aivora-link {
+  0%,
+  100% {
+    opacity: 0.28;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@keyframes aivora-float-chat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.2px);
+  }
+}
+
+@keyframes aivora-float-call {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(1.2px);
+  }
+}
+
+@keyframes aivora-handset {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+}
+
+@keyframes aivora-chat-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-0.8px);
+  }
+}
+
 * {
   box-sizing: border-box;
 }

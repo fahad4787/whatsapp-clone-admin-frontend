@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Copy, Download, Eye, EyeOff, Lock, ShieldCheck, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui";
+import { AivoraBrand, AivoraLogo } from "@/components/brand";
 import { APP, STORAGE_KEYS } from "@/config/constants";
 
 export default function LoginPage() {
@@ -47,17 +48,11 @@ export default function LoginPage() {
           className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_20%,_rgba(29,184,102,0.35),_transparent_55%),radial-gradient(ellipse_at_80%_80%,_rgba(18,154,85,0.18),_transparent_50%)]"
         />
         <div className="relative">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-md bg-gradient-to-br from-[#1db866] to-[#0b7a42] text-sm font-extrabold shadow-[0_12px_28px_rgba(18,154,85,0.45)]">
-              BP
-            </div>
-            <div>
-              <div className="text-[15px] font-extrabold tracking-tight">Bolta Punjab</div>
-              <div className="text-[11px] font-semibold tracking-[0.12em] text-white/55 uppercase">
-                Admin console
-              </div>
-            </div>
-          </div>
+          <AivoraBrand size={44} subtitle="Admin console" inverted />
+        </div>
+
+        <div className="relative my-10 flex justify-start" aria-hidden>
+          <AivoraLogo size={112} />
         </div>
 
         <div className="relative max-w-md">
@@ -90,14 +85,8 @@ export default function LoginPage() {
       {/* Auth column */}
       <div className="relative flex flex-1 items-center justify-center px-4 py-10 sm:px-8">
         <div className="bp-page w-full max-w-[420px]">
-          <div className="mb-7 flex items-center gap-3 lg:hidden">
-            <div className="flex h-11 w-11 items-center justify-center rounded-md bg-gradient-to-br from-[#1db866] to-bp-green-dark text-sm font-extrabold text-white shadow-[0_12px_28px_rgba(18,154,85,0.35)]">
-              BP
-            </div>
-            <div>
-              <div className="text-[15px] font-extrabold tracking-tight text-bp-ink">Bolta Punjab</div>
-              <div className="text-xs font-medium text-bp-muted">Admin console</div>
-            </div>
+          <div className="mb-7 lg:hidden">
+            <AivoraBrand size={44} subtitle="Admin console" />
           </div>
 
           <form onSubmit={onSubmit} className="bp-card p-7 sm:p-8">
@@ -116,7 +105,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="username"
-                placeholder="admin@boltapunjab.dev"
+                placeholder="admin@aivora.dev"
               />
             </label>
 
@@ -162,19 +151,8 @@ export default function LoginPage() {
 
           <section className="bp-card mt-4 p-6 sm:p-7">
             <div className="flex gap-4">
-              <div className="flex h-[5.5rem] w-[5.5rem] shrink-0 items-center justify-center rounded-md border border-dashed border-bp-border bg-gradient-to-b from-white to-[#f4f7f5]">
-                <div className="grid grid-cols-5 gap-0.5 p-2.5 opacity-40" aria-hidden>
-                  {Array.from({ length: 25 }).map((_, i) => (
-                    <span
-                      key={i}
-                      className={`h-1.5 w-1.5 rounded-[1px] ${
-                        [0, 1, 2, 4, 5, 9, 10, 14, 15, 19, 20, 21, 22, 24].includes(i)
-                          ? "bg-bp-ink"
-                          : "bg-transparent ring-1 ring-bp-ink/20"
-                      }`}
-                    />
-                  ))}
-                </div>
+              <div className="flex h-[5.5rem] w-[5.5rem] shrink-0 items-center justify-center rounded-md border border-bp-border bg-gradient-to-b from-white to-[#f4f7f5]">
+                <AivoraLogo size={56} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button, PageHeader, TextInput } from "@/components/ui";
+import { AivoraLogo } from "@/components/brand";
 import { useMockStore } from "@/data";
 
 export default function AndroidPage() {
@@ -41,6 +42,13 @@ export default function AndroidPage() {
         </div>
       ) : null}
       <div className="bp-card p-5">
+        <div className="mb-5 flex items-center gap-3">
+          <AivoraLogo size={48} />
+          <div>
+            <div className="text-[15px] font-extrabold tracking-tight text-bp-ink">Aivora</div>
+            <div className="text-xs font-medium text-bp-muted">Android · Dev build</div>
+          </div>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-semibold">
             Version (optional)

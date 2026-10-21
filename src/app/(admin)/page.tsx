@@ -120,7 +120,7 @@ export default function DashboardPage() {
     <div className="bp-page">
       <PageHeader
         title="Dashboard"
-        description="Live snapshot of sign-ups, messaging, and calls across Bolta Punjab."
+        description="Live snapshot of sign-ups, messaging, and calls across Aivora."
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -27,4 +27,4 @@ Mapped from `https://wa.zirvik.com/admin` (session provided by you).
 Implement APIs behind these screens, then connect:
 
 - Admin UI → admin API  
-- Android Dev app → public `/api/*` + WS (already recovered in `bolta-punjab`)
+- Android Dev app → public `/api/*` + WS (already recovered in `aivora`)

@@ -30,7 +30,7 @@ export const seedOtps: OtpRow[] = [
 
 export const seedConversations: ConversationRow[] = [
   { id: "c1", title: "Direct chat", type: "Direct", members: 2, messages: 179, created: "3 days ago", last: "just now" },
-  { id: "c2", title: "Punjab Friends", type: "Group", members: 8, messages: 42, created: "3 days ago", last: "6 m ago" },
+  { id: "c2", title: "City Friends", type: "Group", members: 8, messages: 42, created: "3 days ago", last: "6 m ago" },
   { id: "c3", title: "Direct chat", type: "Direct", members: 2, messages: 12, created: "3 minutes ago", last: "New" },
 ];
 
@@ -42,7 +42,7 @@ export const seedCalls: CallRow[] = [
 
 export const seedReports: ReportRow[] = [
   { id: "r1", reported: "17 Oct 2026, 03:03", reporter: "Nadia", target: "Kamran", reason: "spam", status: "Open", action: "block" },
-  { id: "r2", reported: "16 Oct 2026, 14:22", reporter: "Ali", target: "Channel: Punjab News", reason: "Misleading advice", status: "Open", action: "channel" },
+  { id: "r2", reported: "16 Oct 2026, 14:22", reporter: "Ali", target: "Channel: Daily News", reason: "Misleading advice", status: "Open", action: "channel" },
 ];
 
 export const seedCountries: CountryRow[] = [
@@ -55,8 +55,8 @@ export const seedCountries: CountryRow[] = [
 ];
 
 export const seedChannels: ChannelRow[] = [
-  { id: "ch1", name: "Punjab News", slug: "punjab-news", followers: 1280, posts: 42 },
-  { id: "ch2", name: "Bolta Updates", slug: "bolta-updates", followers: 540, posts: 18 },
+  { id: "ch1", name: "Daily News", slug: "daily-news", followers: 1280, posts: 42 },
+  { id: "ch2", name: "Aivora Updates", slug: "aivora-updates", followers: 540, posts: 18 },
 ];
 
 export const seedAdmins: AdminRow[] = [
