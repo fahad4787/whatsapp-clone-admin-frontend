@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { BackendHealthBanner } from "@/components/BackendHealthBanner";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { chartData, chartSpecs, type ChartSpec } from "@/features/dashboard";
 import { useMockStore } from "@/data";
@@ -122,6 +123,8 @@ export default function DashboardPage() {
         title="Dashboard"
         description="Live snapshot of sign-ups, messaging, and calls across Aivora."
       />
+
+      <BackendHealthBanner />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((s) => (
