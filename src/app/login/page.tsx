@@ -6,22 +6,30 @@ import { Copy, Download, Eye, EyeOff, Lock, ShieldCheck, Smartphone } from "luci
 import { Button } from "@/components/ui";
 import { AivoraBrand, AivoraLogo } from "@/components/brand";
 import { APP, STORAGE_KEYS } from "@/config/constants";
+import { adminLogin } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState("admin@aivora.dev");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    window.setTimeout(() => {
+    setError(null);
+    try {
+      const result = await adminLogin(email.trim(), password);
       localStorage.setItem(STORAGE_KEYS.adminSession, "1");
+      localStorage.setItem(STORAGE_KEYS.adminToken, result.access);
       router.push("/");
-    }, 350);
+    } catch {
+      setError("Invalid email or password");
+      setBusy(false);
+    }
   }
 
   async function copyLink() {
@@ -140,12 +148,16 @@ export default function LoginPage() {
               <span className="font-medium text-bp-muted/70">Forgot password?</span>
             </div>
 
+            {error ? (
+              <p className="mt-4 text-sm font-medium text-red-600">{error}</p>
+            ) : null}
+
             <Button className="mt-7 w-full" type="submit" disabled={busy}>
               {busy ? "Signing in…" : "Sign in to console"}
             </Button>
 
             <p className="mt-4 text-center text-xs leading-relaxed text-bp-muted">
-              Mock auth for local development — any credentials work.
+              Staging: admin@aivora.dev — password from seed / Render env.
             </p>
           </form>
 
