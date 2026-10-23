@@ -1,130 +1,91 @@
 "use client";
 
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { useCallback, useEffect, useState } from "react";
 import { BackendHealthBanner } from "@/components/BackendHealthBanner";
 import { PageHeader, StatusBadge } from "@/components/ui";
-import { chartData, chartSpecs, type ChartSpec } from "@/features/dashboard";
-import { useMockStore } from "@/data";
+import { STORAGE_KEYS } from "@/config/constants";
+import {
+  fetchAdminMetrics,
+  fetchAdminOtps,
+  fetchAdminReports,
+  type AdminMetrics,
+  type AdminOtpItem,
+  type AdminReportItem,
+} from "@/lib/api";
 
-function StatCard({ label, value, delta }: { label: string; value: string; delta?: string }) {
-  const up = delta?.startsWith("+");
+function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="bp-card p-5">
       <div className="text-[13px] font-medium text-bp-muted">{label}</div>
       <div className="mt-1.5 text-[1.65rem] font-extrabold tracking-tight text-bp-ink">{value}</div>
-      {delta ? (
-        <div className={`mt-1.5 text-xs font-semibold ${up ? "text-bp-green" : "text-bp-muted"}`}>{delta}</div>
-      ) : null}
     </div>
-  );
-}
-
-function LiveDot({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="relative flex h-2 w-2">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-bp-green opacity-40" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-bp-green" />
-      </span>
-      <strong className="tabular-nums">{value}</strong>
-      <span className="text-bp-muted">{label}</span>
-    </div>
-  );
-}
-
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="bp-card p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-bold tracking-tight">{title}</h2>
-        <span className="text-[11px] font-medium text-bp-muted">Last 30 days</span>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function DashboardChart({ spec }: { spec: ChartSpec }) {
-  return (
-    <ChartCard title={spec.title}>
-      <ResponsiveContainer width="100%" height={180}>
-        {spec.kind === "area" ? (
-          <AreaChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-            <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} width={30} />
-            <Tooltip />
-            <Area type="monotone" dataKey={spec.dataKey} stroke={spec.stroke} fill={spec.fill} />
-          </AreaChart>
-        ) : (
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-            <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} width={30} />
-            <Tooltip />
-            <Bar dataKey={spec.dataKey} fill={spec.fill} radius={[4, 4, 0, 0]} />
-          </BarChart>
-        )}
-      </ResponsiveContainer>
-    </ChartCard>
   );
 }
 
 export default function DashboardPage() {
-  const store = useMockStore();
-  const activeUsers = store.users.filter((u) => u.status === "Active").length;
-  const openReports = store.reports.filter((r) => r.status === "Open").length;
-  const pendingOtps = store.otps.filter((o) => o.status === "Pending").length;
-  const usedOtps = store.otps.filter((o) => o.status === "Used").length;
-  const liveRooms = store.live.length;
-  const completedCalls = store.calls.filter((c) => c.outcome === "Completed").length;
+  const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
+  const [otps, setOtps] = useState<AdminOtpItem[]>([]);
+  const [reports, setReports] = useState<AdminReportItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  const stats = [
-    { label: "Registered users", value: `${store.users.length}`, delta: "+555% vs last week" },
-    { label: "Active today", value: `${activeUsers}` },
-    { label: "Messages this week", value: `${store.conversations.reduce((n, c) => n + c.messages, 0)}`, delta: "-54% vs last week" },
-    {
-      label: "Call minutes this week",
-      value: `${completedCalls * 4} min`,
-      delta: "-51% vs last week",
-    },
-  ];
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const token = localStorage.getItem(STORAGE_KEYS.adminToken);
+      if (!token) {
+        setError("Sign in again to load live metrics");
+        return;
+      }
+      const [m, o, r] = await Promise.all([
+        fetchAdminMetrics(token),
+        fetchAdminOtps(token),
+        fetchAdminReports(token, "open"),
+      ]);
+      setMetrics(m);
+      setOtps(o.items.slice(0, 6));
+      setReports(r.items.slice(0, 6));
+    } catch {
+      setError("Could not load dashboard metrics from API");
+    }
+  }, []);
 
-  const live = [
-    { label: "Online users", value: activeUsers },
-    { label: "Open connections", value: store.conversations.length },
-    { label: "Active calls", value: liveRooms },
-    { label: "LiveKit rooms", value: liveRooms },
-  ];
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const last24h = [
-    { k: "OTP requests", v: store.otps.length },
-    { k: "OTP lockouts", v: store.otps.filter((o) => o.status === "Failed").length },
-    { k: "Pushes sent", v: usedOtps + pendingOtps },
-    { k: "Pushes failed", v: store.otps.filter((o) => o.status === "Failed").length },
-    { k: "Open reports", v: openReports, accent: true },
-  ];
-
-  const recentOtps = store.otps.slice(0, 6);
+  const stats = metrics
+    ? [
+        { label: "Registered users", value: `${metrics.users_total}` },
+        { label: "Banned users", value: `${metrics.users_banned}` },
+        { label: "Messages today", value: `${metrics.messages_today}` },
+        { label: "Messages (7d)", value: `${metrics.messages_last_7d}` },
+      ]
+    : [
+        { label: "Registered users", value: "—" },
+        { label: "Banned users", value: "—" },
+        { label: "Messages today", value: "—" },
+        { label: "Messages (7d)", value: "—" },
+      ];
 
   return (
     <div className="bp-page">
       <PageHeader
         title="Dashboard"
-        description="Live snapshot of sign-ups, messaging, and calls across Aivora."
+        description="Live snapshot from the shared Aivora API."
+        actions={
+          <button type="button" className="bp-btn bp-btn-secondary" onClick={() => void load()}>
+            Refresh
+          </button>
+        }
       />
 
       <BackendHealthBanner />
+
+      {error ? (
+        <div className="mb-3 rounded-[var(--radius)] border border-[#f0d4d4] bg-[#fff7f7] px-4 py-2.5 text-sm">
+          {error}
+        </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((s) => (
@@ -133,34 +94,42 @@ export default function DashboardPage() {
       </div>
 
       <div className="bp-card mt-3 flex flex-wrap gap-6 px-4 py-3 text-sm" aria-label="Live">
-        {live.map((m) => (
-          <LiveDot key={m.label} {...m} />
-        ))}
-      </div>
-
-      <div className="mt-3 grid gap-3 xl:grid-cols-2">
-        {chartSpecs.map((spec) => (
-          <DashboardChart key={spec.title} spec={spec} />
-        ))}
+        <div>
+          <strong className="tabular-nums">{metrics?.signups_today ?? "—"}</strong>{" "}
+          <span className="text-bp-muted">signups today</span>
+        </div>
+        <div>
+          <strong className="tabular-nums">{metrics?.conversations_total ?? "—"}</strong>{" "}
+          <span className="text-bp-muted">conversations</span>
+        </div>
+        <div>
+          <strong className="tabular-nums text-bp-green">{metrics?.reports_open ?? "—"}</strong>{" "}
+          <span className="text-bp-muted">open reports</span>
+        </div>
       </div>
 
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
         <div className="bp-card p-4">
-          <h2 className="mb-3 text-base font-semibold">Last 24 hours</h2>
-          <dl className="space-y-2 text-sm">
-            {last24h.map((row) => (
-              <div
-                key={row.k}
-                className="flex justify-between border-b border-slate-100 py-1.5 last:border-0"
-              >
-                <dt className="text-bp-muted">{row.k}</dt>
-                <dd className={row.accent ? "font-semibold text-bp-green" : "font-semibold"}>{row.v}</dd>
-              </div>
-            ))}
-          </dl>
+          <h2 className="mb-3 text-base font-semibold">Open reports</h2>
+          {reports.length === 0 ? (
+            <p className="text-sm text-bp-muted">No open reports.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {reports.map((r) => (
+                <li key={r.id} className="flex justify-between gap-3 border-b border-slate-100 py-1.5 last:border-0">
+                  <span className="truncate">
+                    {r.target_user?.phone ?? "Unknown"} — {r.reason || "No reason"}
+                  </span>
+                  <StatusBadge label={r.status} tone="yellow" />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <div className="bp-card overflow-hidden">
-          <div className="border-b border-bp-border px-4 py-3 text-base font-semibold">Recent OTP requests</div>
+          <div className="border-b border-bp-border px-4 py-3 text-base font-semibold">
+            Recent OTP requests
+          </div>
           <table className="bp-table">
             <thead>
               <tr>
@@ -171,19 +140,29 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {recentOtps.map((o) => (
-                <tr key={o.id}>
-                  <td>{o.time}</td>
-                  <td className="text-bp-green">{o.phone}</td>
-                  <td>
-                    <StatusBadge
-                      label={o.status}
-                      tone={o.status === "Used" ? "green" : o.status === "Pending" ? "yellow" : "red"}
-                    />
+              {otps.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="text-bp-muted">
+                    No OTP requests yet.
                   </td>
-                  <td>{o.attempts}</td>
                 </tr>
-              ))}
+              ) : (
+                otps.map((o) => (
+                  <tr key={o.id}>
+                    <td>{new Date(o.created_at).toLocaleTimeString()}</td>
+                    <td className="text-bp-green">{o.phone}</td>
+                    <td>
+                      <StatusBadge
+                        label={o.status}
+                        tone={
+                          o.status === "Used" ? "green" : o.status === "Pending" ? "yellow" : "red"
+                        }
+                      />
+                    </td>
+                    <td>{o.attempts}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
