@@ -1,10 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { BackendHealthBanner } from "@/components/BackendHealthBanner";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { STORAGE_KEYS } from "@/config/constants";
 import {
+  ApiError,
+  clearAdminSession,
   fetchAdminMetrics,
   fetchAdminOtps,
   fetchAdminReports,
@@ -27,25 +30,42 @@ export default function DashboardPage() {
   const [otps, setOtps] = useState<AdminOtpItem[]>([]);
   const [reports, setReports] = useState<AdminReportItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [needsLogin, setNeedsLogin] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
-    try {
-      const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-      if (!token) {
-        setError("Sign in again to load live metrics");
-        return;
-      }
-      const [m, o, r] = await Promise.all([
-        fetchAdminMetrics(token),
-        fetchAdminOtps(token),
-        fetchAdminReports(token, "open"),
-      ]);
-      setMetrics(m);
-      setOtps(o.items.slice(0, 6));
-      setReports(r.items.slice(0, 6));
-    } catch {
-      setError("Could not load dashboard metrics from API");
+    setNeedsLogin(false);
+    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
+    if (!token) {
+      setNeedsLogin(true);
+      setError("Sign in again to load live metrics");
+      return;
+    }
+
+    const settled = await Promise.allSettled([
+      fetchAdminMetrics(token),
+      fetchAdminOtps(token),
+      fetchAdminReports(token, "open"),
+    ]);
+
+    const [m, o, r] = settled;
+    const unauthorized = settled.some(
+      (s) => s.status === "rejected" && s.reason instanceof ApiError && s.reason.status === 401,
+    );
+    if (unauthorized) {
+      clearAdminSession();
+      setNeedsLogin(true);
+      setError("Admin session expired — sign in again");
+      return;
+    }
+
+    if (m.status === "fulfilled") setMetrics(m.value);
+    if (o.status === "fulfilled") setOtps(o.value.items.slice(0, 6));
+    if (r.status === "fulfilled") setReports(r.value.items.slice(0, 6));
+
+    if (m.status === "rejected") {
+      const reason = m.reason instanceof Error ? m.reason.message : "metrics_failed";
+      setError(`Could not load metrics (${reason})`);
     }
   }, []);
 
@@ -84,6 +104,14 @@ export default function DashboardPage() {
       {error ? (
         <div className="mb-3 rounded-[var(--radius)] border border-[#f0d4d4] bg-[#fff7f7] px-4 py-2.5 text-sm">
           {error}
+          {needsLogin ? (
+            <>
+              {" "}
+              <Link href="/login" className="font-semibold text-bp-green underline">
+                Sign in
+              </Link>
+            </>
+          ) : null}
         </div>
       ) : null}
 

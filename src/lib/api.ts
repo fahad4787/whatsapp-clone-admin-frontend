@@ -1,3 +1,5 @@
+import { STORAGE_KEYS } from "@/config/constants";
+
 export type BackendHealth = {
   ok: boolean;
   service: string;
@@ -19,6 +21,33 @@ export type AdminOtpItem = {
 
 export function apiBaseUrl(): string {
   return (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080").replace(/\/$/, "");
+}
+
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+async function readJson(res: Response): Promise<unknown> {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function errorMessage(data: unknown, fallback: string): string {
+  if (data && typeof data === "object" && "error" in data) {
+    const err = (data as { error?: unknown }).error;
+    if (typeof err === "string" && err) return err;
+  }
+  return fallback;
 }
 
 export async function fetchBackendHealth(
@@ -57,9 +86,9 @@ export async function fetchAdminOtps(token: string, signal?: AbortSignal) {
     signal,
     cache: "no-store",
   });
-  const data = await res.json();
+  const data = await readJson(res);
   if (!res.ok) {
-    throw new Error(data?.error ?? "otp_list_failed");
+    throw new ApiError(res.status, errorMessage(data, "otp_list_failed"));
   }
   return data as { items: AdminOtpItem[] };
 }
@@ -115,8 +144,8 @@ export async function fetchAdminUsers(token: string, q?: string, signal?: AbortS
     signal,
     cache: "no-store",
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error ?? "users_list_failed");
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "users_list_failed"));
   return data as { items: AdminUserItem[] };
 }
 
@@ -126,8 +155,8 @@ export async function banAdminUser(token: string, userId: string, reason?: strin
     headers: { ...adminHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify({ reason }),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error ?? "ban_failed");
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "ban_failed"));
   return data as AdminUserItem;
 }
 
@@ -136,8 +165,8 @@ export async function unbanAdminUser(token: string, userId: string) {
     method: "POST",
     headers: adminHeaders(token),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error ?? "unban_failed");
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "unban_failed"));
   return data as AdminUserItem;
 }
 
@@ -149,8 +178,8 @@ export async function fetchAdminReports(token: string, status?: string, signal?:
     signal,
     cache: "no-store",
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error ?? "reports_list_failed");
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "reports_list_failed"));
   return data as { items: AdminReportItem[] };
 }
 
@@ -169,8 +198,8 @@ export async function resolveAdminReport(
       ban_user: opts?.ban_user ?? false,
     }),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error ?? "resolve_failed");
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "resolve_failed"));
   return data as AdminReportItem;
 }
 
@@ -180,7 +209,17 @@ export async function fetchAdminMetrics(token: string, signal?: AbortSignal) {
     signal,
     cache: "no-store",
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error ?? "metrics_failed");
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "metrics_failed"));
   return data as AdminMetrics;
+}
+
+/** Clear local admin session (e.g. after 401). */
+export function clearAdminSession() {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.adminToken);
+    localStorage.removeItem(STORAGE_KEYS.adminSession);
+  } catch {
+    /* ignore */
+  }
 }
