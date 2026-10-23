@@ -5,6 +5,7 @@ import { PageHeader, StatusBadge } from "@/components/ui";
 import { STORAGE_KEYS } from "@/config/constants";
 import {
   banAdminUser,
+  deleteAdminUser,
   fetchAdminUsers,
   unbanAdminUser,
   type AdminUserItem,
@@ -52,6 +53,21 @@ export default function UsersPage() {
       setItems((list) => list.map((u) => (u.id === user.id ? updated : u)));
     } catch {
       setError(user.banned ? "Unban failed" : "Ban failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function removeUser(user: AdminUserItem) {
+    if (!window.confirm(`Delete ${user.phone}? This cannot be undone.`)) return;
+    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
+    if (!token) return;
+    setBusyId(user.id);
+    try {
+      await deleteAdminUser(token, user.id);
+      setItems((list) => list.filter((u) => u.id !== user.id));
+    } catch {
+      setError("Delete failed");
     } finally {
       setBusyId(null);
     }
@@ -134,14 +150,24 @@ export default function UsersPage() {
                     />
                   </td>
                   <td className="text-right">
-                    <button
-                      type="button"
-                      className="bp-btn bp-btn-secondary"
-                      disabled={busyId === u.id}
-                      onClick={() => void toggleBan(u)}
-                    >
-                      {u.banned ? "Unban" : "Ban"}
-                    </button>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        className="bp-btn bp-btn-secondary"
+                        disabled={busyId === u.id}
+                        onClick={() => void toggleBan(u)}
+                      >
+                        {u.banned ? "Unban" : "Ban"}
+                      </button>
+                      <button
+                        type="button"
+                        className="bp-btn bp-btn-secondary"
+                        disabled={busyId === u.id}
+                        onClick={() => void removeUser(u)}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

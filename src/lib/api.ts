@@ -170,6 +170,16 @@ export async function unbanAdminUser(token: string, userId: string) {
   return data as AdminUserItem;
 }
 
+export async function deleteAdminUser(token: string, userId: string) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/users/${userId}`, {
+    method: "DELETE",
+    headers: adminHeaders(token),
+  });
+  if (res.status === 204) return;
+  const data = await readJson(res);
+  throw new ApiError(res.status, errorMessage(data, "delete_failed"));
+}
+
 export async function fetchAdminReports(token: string, status?: string, signal?: AbortSignal) {
   const params = new URLSearchParams({ limit: "100" });
   if (status) params.set("status", status);
