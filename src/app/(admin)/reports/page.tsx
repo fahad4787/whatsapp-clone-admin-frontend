@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { STORAGE_KEYS } from "@/config/constants";
 import {
@@ -128,49 +128,72 @@ export default function ReportsPage() {
               </tr>
             ) : (
               items.map((r) => (
-                <tr key={r.id}>
-                  <td className="whitespace-nowrap">
-                    {new Date(r.created_at).toLocaleString()}
-                  </td>
-                  <td className="text-bp-green">{r.reporter.phone}</td>
-                  <td>{r.target_user?.phone ?? r.target_conversation_id ?? "—"}</td>
-                  <td className="max-w-[240px] truncate">{r.reason || "—"}</td>
-                  <td>
-                    <StatusBadge label={r.status} tone={tone(r.status)} />
-                  </td>
-                  <td className="text-right">
-                    {r.status === "open" ? (
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          className="bp-btn bp-btn-secondary"
-                          disabled={busyId === r.id}
-                          onClick={() => void act(r, "dismiss")}
-                        >
-                          Dismiss
-                        </button>
-                        <button
-                          type="button"
-                          className="bp-btn bp-btn-secondary"
-                          disabled={busyId === r.id || !r.target_user_id}
-                          onClick={() => void act(r, "resolve", true)}
-                        >
-                          Ban + resolve
-                        </button>
-                        <button
-                          type="button"
-                          className="bp-btn bp-btn-primary"
-                          disabled={busyId === r.id}
-                          onClick={() => void act(r, "resolve")}
-                        >
-                          Resolve
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-bp-muted">—</span>
-                    )}
-                  </td>
-                </tr>
+                <Fragment key={r.id}>
+                  <tr>
+                    <td className="whitespace-nowrap">
+                      {new Date(r.created_at).toLocaleString()}
+                    </td>
+                    <td className="text-bp-green">{r.reporter.phone}</td>
+                    <td>{r.target_user?.phone ?? r.target_conversation_id ?? "—"}</td>
+                    <td className="max-w-[240px] truncate">{r.reason || "—"}</td>
+                    <td>
+                      <StatusBadge label={r.status} tone={tone(r.status)} />
+                    </td>
+                    <td className="text-right">
+                      {r.status === "open" ? (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            className="bp-btn bp-btn-secondary"
+                            disabled={busyId === r.id}
+                            onClick={() => void act(r, "dismiss")}
+                          >
+                            Dismiss
+                          </button>
+                          <button
+                            type="button"
+                            className="bp-btn bp-btn-secondary"
+                            disabled={busyId === r.id || !r.target_user_id}
+                            onClick={() => void act(r, "resolve", true)}
+                          >
+                            Ban + resolve
+                          </button>
+                          <button
+                            type="button"
+                            className="bp-btn bp-btn-primary"
+                            disabled={busyId === r.id}
+                            onClick={() => void act(r, "resolve")}
+                          >
+                            Resolve
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-bp-muted">—</span>
+                      )}
+                    </td>
+                  </tr>
+                  {r.messages && r.messages.length > 0 ? (
+                    <tr className="bg-[#fafafa]">
+                      <td colSpan={6} className="px-4 py-2 text-[12px] text-bp-muted">
+                        <span className="font-semibold text-bp-ink">Reported messages: </span>
+                        {r.messages.map((m) => (
+                          <span key={m.id} className="mr-3 inline-block">
+                            [{m.type}] {m.text}
+                          </span>
+                        ))}
+                        {r.target_conversation_id ? (
+                          <a
+                            className="ml-2 font-semibold text-bp-green underline"
+                            href={`/conversations`}
+                            title={r.target_conversation_id}
+                          >
+                            Open conversations
+                          </a>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
               ))
             )}
           </tbody>

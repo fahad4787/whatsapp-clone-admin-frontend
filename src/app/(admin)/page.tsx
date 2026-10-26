@@ -76,15 +76,15 @@ export default function DashboardPage() {
   const stats = metrics
     ? [
         { label: "Registered users", value: `${metrics.users_total}` },
-        { label: "Banned users", value: `${metrics.users_banned}` },
+        { label: "Online now", value: `${metrics.users_online ?? 0}` },
         { label: "Messages today", value: `${metrics.messages_today}` },
-        { label: "Messages (7d)", value: `${metrics.messages_last_7d}` },
+        { label: "Open reports", value: `${metrics.reports_open}` },
       ]
     : [
         { label: "Registered users", value: "—" },
-        { label: "Banned users", value: "—" },
+        { label: "Online now", value: "—" },
         { label: "Messages today", value: "—" },
-        { label: "Messages (7d)", value: "—" },
+        { label: "Open reports", value: "—" },
       ];
 
   return (
@@ -128,11 +128,36 @@ export default function DashboardPage() {
         </div>
         <div>
           <strong className="tabular-nums">{metrics?.conversations_total ?? "—"}</strong>{" "}
-          <span className="text-bp-muted">conversations</span>
+          <span className="text-bp-muted">chats</span>
+          <span className="text-bp-muted">
+            {" "}
+            ({metrics?.conversations_direct ?? 0} direct · {metrics?.conversations_groups ?? 0} groups)
+          </span>
         </div>
         <div>
-          <strong className="tabular-nums text-bp-green">{metrics?.reports_open ?? "—"}</strong>{" "}
-          <span className="text-bp-muted">open reports</span>
+          <strong className="tabular-nums">{metrics?.conversations_disappearing ?? "—"}</strong>{" "}
+          <span className="text-bp-muted">disappearing on</span>
+        </div>
+        <div>
+          <strong className="tabular-nums">{metrics?.messages_media_today ?? "—"}</strong>{" "}
+          <span className="text-bp-muted">media today</span>
+        </div>
+        <div>
+          <strong className="tabular-nums">{metrics?.messages_voice_today ?? "—"}</strong>{" "}
+          <span className="text-bp-muted">voice today</span>
+        </div>
+        <div>
+          <strong className="tabular-nums">{metrics?.messages_polls_today ?? 0}</strong>/
+          <strong className="tabular-nums">{metrics?.messages_events_today ?? 0}</strong>{" "}
+          <span className="text-bp-muted">polls / events today</span>
+        </div>
+        <div>
+          <strong className="tabular-nums">{metrics?.users_banned ?? "—"}</strong>{" "}
+          <span className="text-bp-muted">banned</span>
+        </div>
+        <div>
+          <strong className="tabular-nums">{metrics?.messages_last_7d ?? "—"}</strong>{" "}
+          <span className="text-bp-muted">msgs (7d)</span>
         </div>
       </div>
 

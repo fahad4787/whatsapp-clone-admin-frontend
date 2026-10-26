@@ -22,9 +22,18 @@ Mapped from `https://wa.zirvik.com/admin` (session provided by you).
 16. Security — 2FA / session policy  
 17. IP access — admin allowlist  
 
-## Backend (later)
+## Live today (Wave 8 + chat Waves 9–15)
 
-Implement APIs behind these screens, then connect:
+| Screen | Status |
+|--------|--------|
+| Dashboard | Live — metrics include online, groups/direct, TTL chats, media/voice/polls/events |
+| Users | Live — last seen + privacy; ban/unban/delete |
+| OTP log | Live |
+| Conversations | Live — list + detail (members, TTL, message types) |
+| Reports | Live — message previews on reported chats |
+| Calls / channels / stickers / settings / … | Still mock / later |
 
-- Admin UI → admin API  
-- Android Dev app → public `/api/*` + WS (already recovered in `aivora`)
+## Backend
+
+- Admin UI → `/api/admin/*` (auth, users, otps, reports, metrics, conversations)  
+- Android app → public `/api/*` + WS (`aivora`)

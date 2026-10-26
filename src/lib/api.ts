@@ -101,10 +101,21 @@ export type AdminUserItem = {
   avatar_url: string | null;
   banned: boolean;
   banned_at: string | null;
+  last_seen_at: string | null;
+  last_seen_privacy: string;
+  online_privacy: string;
   created_at: string;
   updated_at: string;
   device_count: number;
   conversation_count: number;
+};
+
+export type AdminReportMessage = {
+  id: string;
+  conversation_id: string;
+  type: string;
+  text: string;
+  created_at: string;
 };
 
 export type AdminReportItem = {
@@ -120,16 +131,68 @@ export type AdminReportItem = {
   created_at: string;
   reporter: { id: string; phone: string; display_name: string | null };
   target_user: { id: string; phone: string; display_name: string | null } | null;
+  messages?: AdminReportMessage[];
 };
 
 export type AdminMetrics = {
   users_total: number;
   users_banned: number;
+  users_online?: number;
   signups_today: number;
   messages_today: number;
   messages_last_7d: number;
+  messages_media_today?: number;
+  messages_voice_today?: number;
+  messages_polls_today?: number;
+  messages_events_today?: number;
   reports_open: number;
   conversations_total: number;
+  conversations_groups?: number;
+  conversations_direct?: number;
+  conversations_disappearing?: number;
+};
+
+export type AdminConversationItem = {
+  id: string;
+  type: string;
+  title: string;
+  description: string | null;
+  avatar_url: string | null;
+  member_count: number;
+  message_count: number;
+  disappearing_seconds: number;
+  only_admins_can_send: boolean;
+  only_admins_can_edit_info: boolean;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string | null;
+  last_message_preview: string | null;
+  members: {
+    user_id: string;
+    phone: string;
+    display_name: string | null;
+    role: string;
+  }[];
+};
+
+export type AdminConversationDetail = AdminConversationItem & {
+  messages: {
+    id: string;
+    sender_id: string;
+    sender_name: string;
+    type: string;
+    text: string | null;
+    status: string;
+    forwarded: boolean;
+    view_once: boolean;
+    edited_at: string | null;
+    expires_at: string | null;
+    deleted_for_everyone_at: string | null;
+    created_at: string;
+    attachment_name: string | null;
+    attachment_mime: string | null;
+    has_attachment: boolean;
+  }[];
 };
 
 function adminHeaders(token: string): HeadersInit {
@@ -222,6 +285,39 @@ export async function fetchAdminMetrics(token: string, signal?: AbortSignal) {
   const data = await readJson(res);
   if (!res.ok) throw new ApiError(res.status, errorMessage(data, "metrics_failed"));
   return data as AdminMetrics;
+}
+
+export async function fetchAdminConversations(
+  token: string,
+  opts?: { q?: string; type?: string },
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams({ limit: "100" });
+  if (opts?.q?.trim()) params.set("q", opts.q.trim());
+  if (opts?.type) params.set("type", opts.type);
+  const res = await fetch(`${apiBaseUrl()}/api/admin/conversations?${params}`, {
+    headers: adminHeaders(token),
+    signal,
+    cache: "no-store",
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "conversations_failed"));
+  return data as { items: AdminConversationItem[] };
+}
+
+export async function fetchAdminConversation(
+  token: string,
+  id: string,
+  signal?: AbortSignal,
+) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/conversations/${id}?limit=50`, {
+    headers: adminHeaders(token),
+    signal,
+    cache: "no-store",
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "conversation_failed"));
+  return data as AdminConversationDetail;
 }
 
 /** Clear local admin session (e.g. after 401). */

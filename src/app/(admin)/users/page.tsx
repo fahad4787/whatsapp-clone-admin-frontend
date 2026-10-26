@@ -117,6 +117,8 @@ export default function UsersPage() {
               <th>Phone</th>
               <th>Name</th>
               <th>Chats</th>
+              <th>Last seen</th>
+              <th>Privacy</th>
               <th>Status</th>
               <th />
             </tr>
@@ -124,13 +126,13 @@ export default function UsersPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="text-bp-muted">
+                <td colSpan={8} className="text-bp-muted">
                   Loading…
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-bp-muted">
+                <td colSpan={8} className="text-bp-muted">
                   No users found.
                 </td>
               </tr>
@@ -143,6 +145,14 @@ export default function UsersPage() {
                   <td className="text-bp-green">{u.phone}</td>
                   <td>{u.display_name || "—"}</td>
                   <td>{u.conversation_count}</td>
+                  <td className="whitespace-nowrap text-[12px] text-bp-muted">
+                    {u.last_seen_at ? new Date(u.last_seen_at).toLocaleString() : "—"}
+                  </td>
+                  <td className="text-[12px] text-bp-muted">
+                    seen:{u.last_seen_privacy || "everyone"}
+                    <br />
+                    online:{u.online_privacy || "everyone"}
+                  </td>
                   <td>
                     <StatusBadge
                       label={u.banned ? "Banned" : "Active"}
