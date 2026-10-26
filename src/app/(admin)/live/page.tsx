@@ -1,13 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { STORAGE_KEYS } from "@/config/constants";
-import {
-  endAdminCall,
-  fetchAdminLiveCalls,
-  type AdminCallItem,
-} from "@/lib/api";
+import { useAdminCallsStream } from "@/hooks/useAdminCallsStream";
+import { endAdminCall, type AdminCallItem } from "@/lib/api";
 
 function formatWhen(iso: string) {
   try {
@@ -19,35 +16,15 @@ function formatWhen(iso: string) {
 
 export default function LiveCallsPage() {
   const [items, setItems] = useState<AdminCallItem[]>([]);
+  const [live, setLive] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  useAdminCallsStream((snap) => {
+    setItems(snap.items);
+    setLive(true);
     setError(null);
-    try {
-      const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-      if (!token) {
-        setError("Sign in again to view live calls");
-        setItems([]);
-        return;
-      }
-      const data = await fetchAdminLiveCalls(token);
-      setItems(data.items);
-    } catch {
-      setError("Could not load live calls — check API / admin token");
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-    const t = window.setInterval(() => void load(), 8_000);
-    return () => window.clearInterval(t);
-  }, [load]);
+  });
 
   async function forceEnd(call: AdminCallItem) {
     if (!window.confirm(`Force-end this ${call.media} call?`)) return;
@@ -56,6 +33,7 @@ export default function LiveCallsPage() {
     setBusyId(call.id);
     try {
       await endAdminCall(token, call.id);
+      // Optimistic; SSE will confirm.
       setItems((list) => list.filter((c) => c.id !== call.id));
     } catch {
       setError("Force-end failed");
@@ -68,11 +46,18 @@ export default function LiveCallsPage() {
     <div className="bp-page">
       <PageHeader
         title="Live calls"
-        description="Ringing or connected rooms right now. Force-end tears down every participant."
+        description="Ringing or connected rooms — updates automatically when calls start or end."
         actions={
-          <button type="button" className="bp-btn bp-btn-secondary" onClick={() => void load()}>
-            Refresh
-          </button>
+          <span className="text-xs font-medium text-bp-muted">
+            {live ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block size-2 rounded-full bg-bp-green animate-pulse" />
+                Live
+              </span>
+            ) : (
+              "Connecting…"
+            )}
+          </span>
         }
       />
 
@@ -96,14 +81,14 @@ export default function LiveCallsPage() {
             </tr>
           </thead>
           <tbody>
-            {loading && items.length === 0 ? (
+            {!live && items.length === 0 ? (
               <tr>
                 <td colSpan={7} className="text-bp-muted">
-                  Loading…
+                  Connecting to live feed…
                 </td>
               </tr>
             ) : null}
-            {!loading && items.length === 0 ? (
+            {live && items.length === 0 ? (
               <tr>
                 <td colSpan={7} className="text-bp-muted">
                   No calls in progress. When someone places a call, it shows up here.

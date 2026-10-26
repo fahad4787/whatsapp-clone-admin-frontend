@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { BackendHealthBanner } from "@/components/BackendHealthBanner";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { STORAGE_KEYS } from "@/config/constants";
+import { useAdminCallsStream } from "@/hooks/useAdminCallsStream";
 import {
   ApiError,
   clearAdminSession,
@@ -71,7 +72,27 @@ export default function DashboardPage() {
 
   useEffect(() => {
     void load();
+    const t = window.setInterval(() => void load(), 30_000);
+    return () => window.clearInterval(t);
   }, [load]);
+
+  useAdminCallsStream((snap) => {
+    setMetrics((m) =>
+      m
+        ? { ...m, calls_active: snap.calls_active, calls_today: snap.calls_today }
+        : {
+            users_total: 0,
+            users_banned: 0,
+            signups_today: 0,
+            messages_today: 0,
+            messages_last_7d: 0,
+            reports_open: 0,
+            conversations_total: 0,
+            calls_active: snap.calls_active,
+            calls_today: snap.calls_today,
+          },
+    );
+  });
 
   const stats = metrics
     ? [
@@ -91,12 +112,7 @@ export default function DashboardPage() {
     <div className="bp-page">
       <PageHeader
         title="Dashboard"
-        description="Live snapshot from the shared Aivora API."
-        actions={
-          <button type="button" className="bp-btn bp-btn-secondary" onClick={() => void load()}>
-            Refresh
-          </button>
-        }
+        description="Live snapshot from the shared Aivora API — call counts update automatically."
       />
 
       <BackendHealthBanner />

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { STORAGE_KEYS } from "@/config/constants";
+import { useAdminCallsStream } from "@/hooks/useAdminCallsStream";
 import { fetchAdminCalls, type AdminCallItem } from "@/lib/api";
 
 function formatWhen(iso: string) {
@@ -36,7 +37,6 @@ export default function CallHistoryPage() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async (opts?: { q?: string; status?: string; media?: string }) => {
-    setLoading(true);
     setError(null);
     try {
       const token = localStorage.getItem(STORAGE_KEYS.adminToken);
@@ -54,30 +54,27 @@ export default function CallHistoryPage() {
       setItems(data.items);
     } catch {
       setError("Could not load call history — check API / admin token");
-      setItems([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void load();
+    void load({ q, status, media });
+    // Initial load only — search form + stream drive later refreshes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount load
   }, [load]);
+
+  // When any call changes (start/end), refresh history for current filters.
+  useAdminCallsStream(() => {
+    void load({ q, status, media });
+  });
 
   return (
     <div className="bp-page">
       <PageHeader
         title="Call history"
-        description="Completed, missed, cancelled, and in-progress voice or video calls."
-        actions={
-          <button
-            type="button"
-            className="bp-btn bp-btn-secondary"
-            onClick={() => void load({ q, status, media })}
-          >
-            Refresh
-          </button>
-        }
+        description="Completed, missed, cancelled, and in-progress calls — list updates when calls change."
       />
 
       <form
