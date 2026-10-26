@@ -150,6 +150,34 @@ export type AdminMetrics = {
   conversations_groups?: number;
   conversations_direct?: number;
   conversations_disappearing?: number;
+  calls_active?: number;
+  calls_today?: number;
+};
+
+export type AdminCallParticipant = {
+  user_id: string;
+  status: string;
+  phone: string;
+  display_name: string | null;
+};
+
+export type AdminCallItem = {
+  id: string;
+  kind: string;
+  media: string;
+  status: string;
+  end_reason: string | null;
+  room_name: string;
+  conversation_id: string | null;
+  conversation_title: string | null;
+  initiator: { id: string; phone: string; display_name: string | null };
+  participants: AdminCallParticipant[];
+  participants_label: string;
+  started_at: string;
+  answered_at: string | null;
+  ended_at: string | null;
+  duration_seconds: number;
+  expires_at: string | null;
 };
 
 export type AdminConversationItem = {
@@ -328,4 +356,44 @@ export function clearAdminSession() {
   } catch {
     /* ignore */
   }
+}
+
+export async function fetchAdminLiveCalls(token: string, signal?: AbortSignal) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/calls/live`, {
+    headers: adminHeaders(token),
+    signal,
+    cache: "no-store",
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "live_calls_failed"));
+  return data as { items: AdminCallItem[]; count: number };
+}
+
+export async function fetchAdminCalls(
+  token: string,
+  opts?: { q?: string; status?: string; media?: string; limit?: number },
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams({ limit: String(opts?.limit ?? 50) });
+  if (opts?.q?.trim()) params.set("q", opts.q.trim());
+  if (opts?.status?.trim()) params.set("status", opts.status.trim());
+  if (opts?.media?.trim()) params.set("media", opts.media.trim());
+  const res = await fetch(`${apiBaseUrl()}/api/admin/calls?${params}`, {
+    headers: adminHeaders(token),
+    signal,
+    cache: "no-store",
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "calls_list_failed"));
+  return data as { items: AdminCallItem[] };
+}
+
+export async function endAdminCall(token: string, callId: string) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/calls/${callId}/end`, {
+    method: "POST",
+    headers: adminHeaders(token),
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "force_end_failed"));
+  return data as { call: AdminCallItem };
 }

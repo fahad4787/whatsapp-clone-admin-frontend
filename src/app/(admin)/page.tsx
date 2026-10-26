@@ -77,14 +77,14 @@ export default function DashboardPage() {
     ? [
         { label: "Registered users", value: `${metrics.users_total}` },
         { label: "Online now", value: `${metrics.users_online ?? 0}` },
-        { label: "Messages today", value: `${metrics.messages_today}` },
-        { label: "Open reports", value: `${metrics.reports_open}` },
+        { label: "Active calls", value: `${metrics.calls_active ?? 0}` },
+        { label: "Calls today", value: `${metrics.calls_today ?? 0}` },
       ]
     : [
         { label: "Registered users", value: "—" },
         { label: "Online now", value: "—" },
-        { label: "Messages today", value: "—" },
-        { label: "Open reports", value: "—" },
+        { label: "Active calls", value: "—" },
+        { label: "Calls today", value: "—" },
       ];
 
   return (
