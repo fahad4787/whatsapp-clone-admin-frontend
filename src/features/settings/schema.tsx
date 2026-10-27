@@ -60,6 +60,11 @@ export const settingsSections: SettingsSection[] = [
     fields: [
       { type: "text", key: "latestAndroidVersion", label: "Latest app version" },
       { type: "number", key: "latestAndroidVersionCode", label: "Latest app versionCode" },
+      {
+        type: "number",
+        key: "minAndroidVersionCode",
+        label: "Minimum versionCode (force update below this)",
+      },
       { type: "text", key: "downloadUrl", label: "Download URL" },
     ],
   },

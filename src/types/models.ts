@@ -108,6 +108,7 @@ export type SettingsMap = {
   maintenanceMode: boolean;
   latestAndroidVersion: string;
   latestAndroidVersionCode: number;
+  minAndroidVersionCode: number;
   downloadUrl: string;
   allowPeopleSearch: boolean;
   minSearchChars: number;

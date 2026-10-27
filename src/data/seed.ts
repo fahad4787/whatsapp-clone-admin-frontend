@@ -87,6 +87,7 @@ export const seedSettings: SettingsMap = {
   maintenanceMode: false,
   latestAndroidVersion: APP.androidVersion,
   latestAndroidVersionCode: 28,
+  minAndroidVersionCode: 1,
   downloadUrl: APP.downloadUrl,
   allowPeopleSearch: true,
   minSearchChars: 3,

@@ -397,3 +397,135 @@ export async function endAdminCall(token: string, callId: string) {
   if (!res.ok) throw new ApiError(res.status, errorMessage(data, "force_end_failed"));
   return data as { call: AdminCallItem };
 }
+
+/** Wave 20 — snake_case settings from API. */
+export type AdminSettingsDto = {
+  otp_length: number;
+  otp_expiry: number;
+  otp_attempts: number;
+  otp_gap: number;
+  otp_per_phone_hourly: number;
+  otp_per_ip_hourly: number;
+  ring_timeout: number;
+  max_group_call_participants: number;
+  max_group_size: number;
+  upload_limit_mb: number;
+  edit_window_minutes: number;
+  maintenance_mode: boolean;
+  latest_android_version: string;
+  latest_android_version_code: number;
+  min_android_version_code: number;
+  download_url: string;
+  allow_people_search: boolean;
+  min_search_chars: number;
+  sms_enabled: boolean;
+};
+
+export type AdminCountryItem = {
+  iso: string;
+  name: string;
+  dial: string;
+  enabled: boolean;
+  sort_order: number;
+};
+
+export type AdminAuditItem = {
+  id: string;
+  action: string;
+  meta: unknown;
+  created_at: string;
+  actor: { id: string; email: string; display_name: string | null };
+};
+
+export type AdminAdminItem = {
+  id: string;
+  email: string;
+  display_name: string | null;
+  role: string;
+  created_at: string;
+  updated_at?: string;
+};
+
+export async function fetchAdminSettings(token: string, signal?: AbortSignal) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/settings`, {
+    headers: adminHeaders(token),
+    signal,
+    cache: "no-store",
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "settings_failed"));
+  return data as { settings: AdminSettingsDto };
+}
+
+export async function putAdminSettings(token: string, patch: Partial<AdminSettingsDto>) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/settings`, {
+    method: "PUT",
+    headers: { ...adminHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "settings_save_failed"));
+  return data as { settings: AdminSettingsDto };
+}
+
+export async function fetchAdminCountries(token: string, signal?: AbortSignal) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/countries`, {
+    headers: adminHeaders(token),
+    signal,
+    cache: "no-store",
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "countries_failed"));
+  return data as { items: AdminCountryItem[] };
+}
+
+export async function updateAdminCountry(
+  token: string,
+  iso: string,
+  patch: { enabled?: boolean; name?: string; dial?: string; sort_order?: number },
+) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/countries/${encodeURIComponent(iso)}`, {
+    method: "PUT",
+    headers: { ...adminHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "country_update_failed"));
+  return data as AdminCountryItem;
+}
+
+export async function fetchAdminAudit(token: string, signal?: AbortSignal) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/audit?limit=100`, {
+    headers: adminHeaders(token),
+    signal,
+    cache: "no-store",
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "audit_failed"));
+  return data as { items: AdminAuditItem[] };
+}
+
+export async function fetchAdminAdmins(token: string, signal?: AbortSignal) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/admins`, {
+    headers: adminHeaders(token),
+    signal,
+    cache: "no-store",
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "admins_failed"));
+  return data as { items: AdminAdminItem[] };
+}
+
+export async function createAdminAdmin(
+  token: string,
+  body: { email: string; password: string; display_name?: string; role?: "SUPER" | "MOD" },
+) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/admins`, {
+    method: "POST",
+    headers: { ...adminHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "admin_create_failed"));
+  return data as AdminAdminItem;
+}
