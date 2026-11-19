@@ -529,3 +529,198 @@ export async function createAdminAdmin(
   if (!res.ok) throw new ApiError(res.status, errorMessage(data, "admin_create_failed"));
   return data as AdminAdminItem;
 }
+
+export type AdminChannelItem = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  verified: boolean;
+  listed: boolean;
+  followers: number;
+  posts: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminChannelPostItem = {
+  id: string;
+  text: string;
+  deleted: boolean;
+  view_count: number;
+  created_at: string;
+};
+
+export type AdminStickerPackItem = {
+  id: string;
+  name: string;
+  publisher: string;
+  featured: boolean;
+  stickers: number;
+  created: string;
+};
+
+export async function fetchAdminChannels(token: string, signal?: AbortSignal) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/channels`, {
+    headers: adminHeaders(token),
+    signal,
+    cache: "no-store",
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "channels_failed"));
+  return data as { items: AdminChannelItem[] };
+}
+
+export async function createAdminChannel(
+  token: string,
+  body: { name: string; slug?: string; description?: string; verified?: boolean; listed?: boolean },
+) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/channels`, {
+    method: "POST",
+    headers: { ...adminHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "channel_create_failed"));
+  return data as AdminChannelItem;
+}
+
+export async function patchAdminChannel(
+  token: string,
+  id: string,
+  patch: { name?: string; description?: string | null; verified?: boolean; listed?: boolean },
+) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/channels/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { ...adminHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "channel_update_failed"));
+  return data as AdminChannelItem;
+}
+
+export async function deleteAdminChannel(token: string, id: string) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/channels/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: adminHeaders(token),
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "channel_delete_failed"));
+  return data as { ok: boolean };
+}
+
+export async function fetchAdminChannelPosts(token: string, id: string, signal?: AbortSignal) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/channels/${encodeURIComponent(id)}/posts`, {
+    headers: adminHeaders(token),
+    signal,
+    cache: "no-store",
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "channel_posts_failed"));
+  return data as { items: AdminChannelPostItem[] };
+}
+
+export async function hideAdminChannelPost(token: string, channelId: string, postId: string) {
+  const res = await fetch(
+    `${apiBaseUrl()}/api/admin/channels/${encodeURIComponent(channelId)}/posts/${encodeURIComponent(postId)}`,
+    { method: "DELETE", headers: adminHeaders(token) },
+  );
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "channel_post_hide_failed"));
+  return data as { ok: boolean };
+}
+
+export async function fetchAdminStickers(token: string, signal?: AbortSignal) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/stickers`, {
+    headers: adminHeaders(token),
+    signal,
+    cache: "no-store",
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "stickers_failed"));
+  return data as { items: AdminStickerPackItem[]; note?: string };
+}
+
+export async function fetchAdminFirewall(token: string, signal?: AbortSignal) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/firewall`, {
+    headers: adminHeaders(token),
+    signal,
+    cache: "no-store",
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "firewall_failed"));
+  return data as { allowlist: string[]; client_ip: string | null };
+}
+
+export async function putAdminFirewall(token: string, allowlist: string[]) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/firewall`, {
+    method: "PUT",
+    headers: { ...adminHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ allowlist }),
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "firewall_save_failed"));
+  return data as { allowlist: string[]; client_ip: string | null };
+}
+
+export type AdminLegalDocs = {
+  privacy_policy: string;
+  terms_of_service: string;
+};
+
+export async function fetchAdminLegal(token: string, signal?: AbortSignal) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/legal`, {
+    headers: adminHeaders(token),
+    signal,
+    cache: "no-store",
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "legal_failed"));
+  return data as AdminLegalDocs;
+}
+
+export async function putAdminLegal(token: string, body: AdminLegalDocs) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/legal`, {
+    method: "PUT",
+    headers: { ...adminHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "legal_save_failed"));
+  return data as AdminLegalDocs;
+}
+
+export type AdminSecuritySettings = {
+  require_2fa: boolean;
+  lock_after_fail: boolean;
+  session_hours: number;
+  max_fail_attempts: number;
+  lock_minutes: number;
+  note?: string;
+};
+
+export async function fetchAdminSecurity(token: string, signal?: AbortSignal) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/security`, {
+    headers: adminHeaders(token),
+    signal,
+    cache: "no-store",
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "security_failed"));
+  return data as AdminSecuritySettings;
+}
+
+export async function putAdminSecurity(
+  token: string,
+  body: Partial<Omit<AdminSecuritySettings, "note">>,
+) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/security`, {
+    method: "PUT",
+    headers: { ...adminHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "security_save_failed"));
+  return data as AdminSecuritySettings;
+}
