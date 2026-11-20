@@ -1,206 +1,175 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, ChatTranscript, DataTable, PageHeader, RefreshButton, StatusBadge, type Column } from "@/components/ui";
+import { useAdminList } from "@/hooks/useAdminList";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
-import { PageHeader, StatusBadge, SkeletonRows } from "@/components/ui";
-import { STORAGE_KEYS } from "@/config/constants";
 import {
   fetchAdminConversation,
   fetchAdminConversations,
+  getAdminToken,
   type AdminConversationDetail,
   type AdminConversationItem,
 } from "@/lib/api";
+import { fmtDateTime } from "@/lib/format";
 
-function fmtWhen(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
-}
+type TypeFilter = "all" | "direct" | "group";
 
-function ttlLabel(seconds: number): string {
-  if (seconds <= 0) return "Off";
-  if (seconds === 86_400) return "24h";
-  if (seconds === 604_800) return "7d";
-  if (seconds === 7_776_000) return "90d";
-  return `${seconds}s`;
-}
+const TYPE_FILTERS: { key: TypeFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "direct", label: "Direct" },
+  { key: "group", label: "Groups" },
+];
+
+const TYPE_BADGE: Record<string, { label: string; tone: "brown" | "green" }> = {
+  group: { label: "Group", tone: "brown" },
+  direct: { label: "Direct", tone: "green" },
+};
+
+const TTL_LABELS: Record<number, string> = { 0: "Off", 86_400: "24h", 604_800: "7d", 7_776_000: "90d" };
+const ttlLabel = (s: number) => TTL_LABELS[Math.max(0, s)] ?? `${s}s`;
+
+const typeBadge = (type: string) => TYPE_BADGE[type] ?? TYPE_BADGE.direct;
+
+const COLUMNS: Column<AdminConversationItem>[] = [
+  {
+    key: "conversation",
+    header: "Conversation",
+    className: "max-w-[260px]",
+    cell: (c) => (
+      <>
+        <div className="font-semibold text-bp-ink">{c.title}</div>
+        <div className="mt-0.5 truncate text-[12px] text-bp-muted">{c.last_message_preview ?? "No messages"}</div>
+      </>
+    ),
+  },
+  { key: "type", header: "Type", cell: (c) => <StatusBadge label={typeBadge(c.type).label} tone={typeBadge(c.type).tone} /> },
+  { key: "members", header: "Members", cell: (c) => c.member_count },
+  { key: "msgs", header: "Msgs", cell: (c) => c.message_count },
+  { key: "ttl", header: "TTL", cell: (c) => ttlLabel(c.disappearing_seconds) },
+  {
+    key: "last",
+    header: "Last",
+    className: "whitespace-nowrap text-[12px] text-bp-muted",
+    cell: (c) => fmtDateTime(c.last_message_at ?? c.updated_at),
+  },
+];
 
 export default function ConversationsPage() {
-  const [items, setItems] = useState<AdminConversationItem[]>([]);
-  const [q, setQ] = useState("");
-  const [type, setType] = useState<"all" | "group" | "direct">("all");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [draftQ, setDraftQ] = useState("");
+  const [query, setQuery] = useState("");
+  const [type, setType] = useState<TypeFilter>("all");
+  const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AdminConversationDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [perspective, setPerspective] = useState<string | null>(null);
 
-  const load = useCallback(async (search?: string, filterType?: typeof type) => {
-    setError(null);
-    try {
-      const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-      if (!token) {
-        setError("Sign in again to view conversations");
-        return;
-      }
-      const t = filterType ?? type;
-      const data = await fetchAdminConversations(token, {
-        q: search,
-        type: t === "all" ? undefined : t,
-      });
-      setItems(data.items);
-    } catch {
-      setError("Could not load conversations — check API / admin token");
-    } finally {
-      setLoading(false);
-    }
-  }, [type]);
+  const fetcher = useCallback(
+    async (t: string) =>
+      (await fetchAdminConversations(t, { q: query || undefined, type: type === "all" ? undefined : type })).items,
+    [query, type],
+  );
+  const { items, loading, error, reload } = useAdminList(fetcher, {
+    interval: 8_000,
+    errorMessage: "Could not load conversations — check your connection",
+  });
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  async function openDetail(id: string, silent = false) {
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
+  const loadDetail = useCallback(async (id: string, silent: boolean) => {
+    const token = getAdminToken();
     if (!token) return;
     if (!silent) {
       setDetailLoading(true);
-      setDetail(null);
+      setDetailError(null);
     }
     try {
       const data = await fetchAdminConversation(token, id);
       setDetail(data);
+      // Keep the chosen viewpoint if still a member; otherwise the first member.
+      setPerspective((cur) => (cur && data.members.some((m) => m.user_id === cur) ? cur : (data.members[0]?.user_id ?? null)));
     } catch {
-      if (!silent) setError("Could not load conversation detail");
+      if (!silent) setDetailError("Could not load conversation");
     } finally {
       if (!silent) setDetailLoading(false);
     }
-  }
+  }, []);
 
-  const openId = detail?.id;
+  // Opening another chat: clear the old one, then load.
+  useEffect(() => {
+    if (!openId) return;
+    setDetail(null);
+    setPerspective(null);
+    void loadDetail(openId, false);
+  }, [openId, loadDetail]);
+
+  // Keep the open chat live without flicker.
   useAutoRefresh(async () => {
-    await load(q, type);
-    if (openId) await openDetail(openId, true);
-  }, 8000);
+    if (openId) await loadDetail(openId, true);
+  }, 5_000);
+
+  const memberName = useMemo(() => {
+    const map = new Map<string, string>();
+    detail?.members.forEach((m) => map.set(m.user_id, m.display_name || m.phone));
+    return map;
+  }, [detail]);
 
   return (
     <div className="bp-page">
       <PageHeader
         title="Conversations"
-        description="Live direct chats and groups from Waves 9–15 — members, TTL, recent messages."
-        actions={
-          <button type="button" className="bp-btn bp-btn-secondary" onClick={() => void load(q, type)}>
-            Refresh
-          </button>
-        }
+        description="Live direct chats and groups — members, disappearing timer, and the transcript as the app shows it."
+        actions={<RefreshButton onClick={() => void reload()} />}
       />
+      <Alert>{error}</Alert>
 
-      {error ? (
-        <div className="bp-alert">
-          {error}
-        </div>
-      ) : null}
-
-      <div className="mb-3 flex flex-wrap gap-2">
-        <input
-          className="bp-input max-w-xs"
-          placeholder="Search title or id"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void load(q, type);
-          }}
-        />
-        <button type="button" className="bp-btn bp-btn-secondary" onClick={() => void load(q, type)}>
+      <form
+        className="mb-3 flex flex-wrap gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setQuery(draftQ.trim());
+        }}
+      >
+        <input className="bp-input max-w-xs" placeholder="Search title or id" value={draftQ} onChange={(e) => setDraftQ(e.target.value)} />
+        <button type="submit" className="bp-btn bp-btn-secondary">
           Search
         </button>
-        {(["all", "direct", "group"] as const).map((t) => (
+        {TYPE_FILTERS.map((f) => (
           <button
-            key={t}
+            key={f.key}
             type="button"
-            className={`bp-btn ${type === t ? "bp-btn-primary" : "bp-btn-secondary"}`}
-            onClick={() => {
-              setType(t);
-              void load(q, t);
-            }}
+            className={`bp-btn ${type === f.key ? "bp-btn-primary" : "bp-btn-secondary"}`}
+            onClick={() => setType(f.key)}
           >
-            {t === "all" ? "All" : t === "direct" ? "Direct" : "Groups"}
+            {f.label}
           </button>
         ))}
-      </div>
+      </form>
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
-        <div className="bp-card overflow-hidden">
-          <table className="bp-table">
-            <thead>
-              <tr>
-                <th>Conversation</th>
-                <th>Type</th>
-                <th>Members</th>
-                <th>Msgs</th>
-                <th>TTL</th>
-                <th>Last</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <SkeletonRows cols={6} />
-              ) : items.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="bp-empty">
-                    No conversations
-                  </td>
-                </tr>
-              ) : (
-                items.map((c) => (
-                  <tr
-                    key={c.id}
-                    className={`is-clickable ${detail?.id === c.id ? "is-selected" : ""}`}
-                    onClick={() => void openDetail(c.id)}
-                  >
-                    <td className="max-w-[260px]">
-                      <div className="font-semibold text-bp-ink">{c.title}</div>
-                      <div className="mt-0.5 truncate text-[12px] text-bp-muted">
-                        {c.last_message_preview ?? "No messages"}
-                      </div>
-                    </td>
-                    <td>
-                      <StatusBadge
-                        label={c.type === "group" ? "Group" : "Direct"}
-                        tone={c.type === "group" ? "brown" : "green"}
-                      />
-                    </td>
-                    <td>{c.member_count}</td>
-                    <td>{c.message_count}</td>
-                    <td>{ttlLabel(c.disappearing_seconds)}</td>
-                    <td className="whitespace-nowrap text-[12px] text-bp-muted">
-                      {fmtWhen(c.last_message_at ?? c.updated_at)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+      <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
+        <DataTable
+          columns={COLUMNS}
+          rows={items}
+          getKey={(c) => c.id}
+          loading={loading}
+          empty="No conversations"
+          selectedKey={openId}
+          onRowClick={(c) => setOpenId(c.id)}
+          pageSize={10}
+        />
 
         <div className="bp-card p-5 xl:sticky xl:top-20 xl:self-start">
           {detailLoading ? (
-            <div className="py-10 text-center text-bp-muted">Loading detail…</div>
+            <div className="py-10 text-center text-bp-muted">Loading chat…</div>
+          ) : detailError ? (
+            <Alert>{detailError}</Alert>
           ) : !detail ? (
-            <div className="py-10 text-center text-bp-muted">
-              Select a conversation to inspect members and recent messages.
-            </div>
+            <div className="py-10 text-center text-bp-muted">Select a conversation to read it like the app shows it.</div>
           ) : (
-            <div className="space-y-5">
+            <div className="space-y-4">
               <div>
                 <div className="text-lg font-extrabold text-bp-ink">{detail.title}</div>
-                <div className="mt-1 flex flex-wrap gap-2 text-[12px]">
-                  <StatusBadge
-                    label={detail.type === "group" ? "Group" : "Direct"}
-                    tone={detail.type === "group" ? "brown" : "green"}
-                  />
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px]">
+                  <StatusBadge label={typeBadge(detail.type).label} tone={typeBadge(detail.type).tone} />
                   <span className="text-bp-muted">TTL {ttlLabel(detail.disappearing_seconds)}</span>
                   {detail.only_admins_can_send ? (
                     <span className="rounded bg-[#fff4e5] px-2 py-0.5 text-[#9a6700]">Admins only send</span>
@@ -209,59 +178,24 @@ export default function ConversationsPage() {
                 <div className="mt-1 font-mono text-[11px] text-bp-muted">{detail.id}</div>
               </div>
 
-              <div>
-                <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-bp-muted">
-                  Members ({detail.members.length})
-                </div>
-                <ul className="space-y-2.5">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-[12px] font-semibold uppercase tracking-wide text-bp-muted">View as</span>
+                <select
+                  className="bp-input !w-auto !py-1"
+                  value={perspective ?? ""}
+                  onChange={(e) => setPerspective(e.target.value)}
+                >
                   {detail.members.map((m) => (
-                    <li key={m.user_id} className="flex items-center justify-between text-sm">
-                      <span>
-                        {m.display_name || m.phone}
-                        <span className="ml-2 text-[12px] text-bp-muted">{m.phone}</span>
-                      </span>
-                      <StatusBadge label={m.role} tone={m.role === "admin" ? "green" : "gray"} />
-                    </li>
+                    <option key={m.user_id} value={m.user_id}>
+                      {memberName.get(m.user_id)}
+                      {m.role === "admin" ? " (admin)" : ""}
+                    </option>
                   ))}
-                </ul>
+                </select>
+                <span className="text-[12px] text-bp-muted">{detail.members.length} members · their messages show on the right</span>
               </div>
 
-              <div>
-                <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-bp-muted">
-                  Recent messages
-                </div>
-                <div className="bp-chat">
-                  {detail.messages.length === 0 ? (
-                    <div className="py-6 text-center text-sm text-bp-muted">No messages</div>
-                  ) : (
-                    [...detail.messages]
-                      .sort((x, y) => +new Date(x.created_at) - +new Date(y.created_at))
-                      .map((m, i, arr) => {
-                        const newSender = i === 0 || arr[i - 1].sender_name !== m.sender_name;
-                        return (
-                          <div key={m.id} className={`bp-bubble ${newSender && i > 0 ? "bp-bubble--gap" : ""}`}>
-                            {newSender ? (
-                              <div className="mb-0.5 text-[12px] font-bold text-bp-green">{m.sender_name}</div>
-                            ) : null}
-                            <div className="text-bp-ink">
-                              {m.text ||
-                                (m.has_attachment
-                                  ? `📎 ${m.attachment_name ?? m.type}`
-                                  : "—")}
-                            </div>
-                            <div className="bp-bubble-meta">
-                              {m.type !== "text" ? <span>{m.type}</span> : null}
-                              {m.edited_at ? <span>edited</span> : null}
-                              {m.view_once ? <span>view-once</span> : null}
-                              {m.forwarded ? <span>forwarded</span> : null}
-                              <span>{new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                            </div>
-                          </div>
-                        );
-                      })
-                  )}
-                </div>
-              </div>
+              <ChatTranscript messages={detail.messages} perspectiveId={perspective} isGroup={detail.type === "group"} />
             </div>
           )}
         </div>

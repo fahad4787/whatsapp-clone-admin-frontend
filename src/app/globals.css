@@ -680,10 +680,43 @@ a.bp-btn {
   gap: 0.2rem;
   padding: 1rem;
   border-radius: var(--radius);
-  background: #eef2ee;
-  max-height: 460px;
+  background-color: #efeae2;
+  background-image: radial-gradient(rgba(12, 22, 18, 0.045) 1px, transparent 1px);
+  background-size: 18px 18px;
+  height: min(560px, 62vh);
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
+
+.bp-chat-day {
+  align-self: center;
+  margin: 0.7rem 0 0.4rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 1px rgba(12, 22, 18, 0.08);
+  font-size: 0.7rem;
+  color: #54656f;
+}
+
+.bp-bubble--in { align-self: flex-start; }
+.bp-bubble--out { align-self: flex-end; background: #d9fdd3; }
+.bp-bubble.bp-bubble--in.bp-bubble--tail { border-top-left-radius: 2px; }
+.bp-bubble.bp-bubble--out.bp-bubble--tail { border-top-right-radius: 2px; }
+
+.bp-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  border-top: 1px solid var(--bp-line, #e6ece8);
+  font-size: 0.8rem;
+  color: #5c6b63;
+}
+.bp-pager-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.bp-pager-controls .bp-btn { padding: 0.3rem 0.65rem; }
 
 .bp-bubble {
   max-width: 82%;
