@@ -87,7 +87,7 @@ export default function LoginPage() {
           </ul>
         </div>
 
-        <p className="relative text-xs text-white/40">Dev environment · mock authentication</p>
+        <p className="relative text-xs text-white/40">Secure admin console</p>
       </aside>
 
       {/* Auth column */}

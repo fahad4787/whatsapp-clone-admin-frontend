@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { STORAGE_KEYS } from "@/config/constants";
-import { fetchAdminOtps, type AdminOtpItem } from "@/lib/api";
+import { fetchAdminOtps, generateAdminOtp, type AdminOtpItem } from "@/lib/api";
 
 function tone(status: string): "green" | "yellow" | "red" | "gray" {
   if (status === "Used") return "green";
@@ -40,7 +40,23 @@ export default function OtpsPage() {
 
   useEffect(() => {
     void load();
+    const t = window.setInterval(() => void load(), 10_000);
+    return () => window.clearInterval(t);
   }, [load]);
+
+  async function generate() {
+    const phone = window.prompt("Phone in international format, e.g. +923001234567");
+    if (!phone) return;
+    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
+    if (!token) return;
+    try {
+      const r = await generateAdminOtp(token, phone.trim());
+      window.alert(`Code for ${r.phone}: ${r.code}`);
+      void load();
+    } catch {
+      setError("Could not generate code — check the phone number (+countrycode…)");
+    }
+  }
 
   return (
     <div className="bp-page">
@@ -48,9 +64,14 @@ export default function OtpsPage() {
         title="OTP log"
         description="Dev codes from the shared API. Copy a code into the Android app to sign in."
         actions={
-          <button type="button" className="bp-btn bp-btn-secondary" onClick={() => void load()}>
-            Refresh
-          </button>
+          <div className="flex gap-2">
+            <button type="button" className="bp-btn bp-btn-secondary" onClick={() => void load()}>
+              Refresh
+            </button>
+            <button type="button" className="bp-btn bp-btn-primary" onClick={() => void generate()}>
+              Generate code
+            </button>
+          </div>
         }
       />
 

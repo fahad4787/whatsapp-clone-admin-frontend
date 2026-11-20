@@ -5,6 +5,8 @@ import { PageHeader, StatusBadge } from "@/components/ui";
 import { STORAGE_KEYS } from "@/config/constants";
 import {
   banAdminUser,
+  createAdminUser,
+  downloadCsv,
   deleteAdminUser,
   fetchAdminUsers,
   unbanAdminUser,
@@ -41,6 +43,27 @@ export default function UsersPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function addUser() {
+    const phone = window.prompt("Phone in international format, e.g. +923001234567");
+    if (!phone) return;
+    const name = window.prompt("Display name (optional)") ?? "";
+    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
+    if (!token) return;
+    try {
+      const u = await createAdminUser(token, phone.trim(), name.trim());
+      setItems((list) => [u, ...list]);
+    } catch (e) {
+      setError(e instanceof Error && e.message === "phone_taken" ? "That phone already exists" : "Create failed — use +countrycode number");
+    }
+  }
+
+  function exportUsers() {
+    downloadCsv("users.csv", [
+      ["Joined", "Phone", "Name", "Chats", "Last seen", "Status"],
+      ...items.map((u) => [u.created_at, u.phone, u.display_name, u.conversation_count, u.last_seen_at, u.banned ? "Banned" : "Active"]),
+    ]);
+  }
 
   async function toggleBan(user: AdminUserItem) {
     const token = localStorage.getItem(STORAGE_KEYS.adminToken);
@@ -79,9 +102,17 @@ export default function UsersPage() {
         title="Users"
         description="Search accounts, ban spam, and restore access."
         actions={
-          <button type="button" className="bp-btn bp-btn-secondary" onClick={() => void load(q)}>
-            Refresh
-          </button>
+          <div className="flex gap-2">
+            <button type="button" className="bp-btn bp-btn-secondary" onClick={exportUsers}>
+              Export CSV
+            </button>
+            <button type="button" className="bp-btn bp-btn-secondary" onClick={() => void load(q)}>
+              Refresh
+            </button>
+            <button type="button" className="bp-btn bp-btn-primary" onClick={() => void addUser()}>
+              Create user
+            </button>
+          </div>
         }
       />
 

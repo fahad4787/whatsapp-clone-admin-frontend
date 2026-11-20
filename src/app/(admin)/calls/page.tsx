@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { STORAGE_KEYS } from "@/config/constants";
 import { useAdminCallsStream } from "@/hooks/useAdminCallsStream";
-import { fetchAdminCalls, type AdminCallItem } from "@/lib/api";
+import { downloadCsv, fetchAdminCalls, type AdminCallItem } from "@/lib/api";
 
 function formatWhen(iso: string) {
   try {
@@ -70,11 +70,23 @@ export default function CallHistoryPage() {
     void load({ q, status, media });
   });
 
+  function exportCalls() {
+    downloadCsv("call-history.csv", [
+      ["Started", "Type", "Media", "Status", "Initiator", "Participants", "Duration (s)", "End reason"],
+      ...items.map((c) => [c.started_at, c.kind, c.media, c.status, c.initiator.phone, c.participants_label, c.duration_seconds, c.end_reason]),
+    ]);
+  }
+
   return (
     <div className="bp-page">
       <PageHeader
         title="Call history"
         description="Completed, missed, cancelled, and in-progress calls — list updates when calls change."
+        actions={
+          <button type="button" className="bp-btn bp-btn-secondary" onClick={exportCalls}>
+            Export CSV
+          </button>
+        }
       />
 
       <form

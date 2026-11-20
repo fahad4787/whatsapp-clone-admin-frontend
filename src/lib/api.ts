@@ -724,3 +724,40 @@ export async function putAdminSecurity(
   if (!res.ok) throw new ApiError(res.status, errorMessage(data, "security_save_failed"));
   return data as AdminSecuritySettings;
 }
+
+export async function createAdminUser(token: string, phone: string, displayName?: string) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/users`, {
+    method: "POST",
+    headers: { ...adminHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ phone, display_name: displayName || undefined }),
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "create_user_failed"));
+  return data as AdminUserItem;
+}
+
+export async function generateAdminOtp(token: string, phone: string) {
+  const res = await fetch(`${apiBaseUrl()}/api/admin/otps/generate`, {
+    method: "POST",
+    headers: { ...adminHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ phone }),
+  });
+  const data = await readJson(res);
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "otp_generate_failed"));
+  return data as { id: string; phone: string; code: string };
+}
+
+/** Download rows as a CSV file in the browser. */
+export function downloadCsv(filename: string, rows: (string | number | null | undefined)[][]) {
+  const esc = (v: string | number | null | undefined) => {
+    const s = v == null ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const blob = new Blob([rows.map((r) => r.map(esc).join(",")).join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
