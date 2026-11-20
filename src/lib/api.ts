@@ -27,7 +27,7 @@ let redirecting = false;
 
 /** fetch for authenticated admin calls: a 401 means the session is gone — go to login once, keeping the page. */
 export async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
-  const res = await apiFetch(input, init);
+  const res = await fetch(input, init);
   if (res.status === 401 && typeof window !== "undefined" && !redirecting) {
     const headers = new Headers(init?.headers);
     if (headers.get("Authorization")?.startsWith("Bearer ") && !input.includes("/auth/")) {
