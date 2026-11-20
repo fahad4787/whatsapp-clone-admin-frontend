@@ -757,3 +757,47 @@ main {
 .bp-table tbody tr.is-clickable { cursor: pointer; }
 .bp-table tbody tr.is-selected td { background: #eef7f2; }
 .bp-card.overflow-x-auto, .bp-table-scroll { overflow-x: auto; }
+
+/* Filter toolbar */
+.bp-filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+}
+.bp-segment {
+  display: inline-flex;
+  height: var(--control-h);
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--bp-border);
+  border-radius: var(--radius-sm);
+  background: #f4f7f5;
+}
+.bp-segment button {
+  padding: 0 0.95rem;
+  border-radius: calc(var(--radius-sm) - 3px);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #5c6b63;
+  transition: background var(--ease), color var(--ease), box-shadow var(--ease);
+}
+.bp-segment button:hover { color: var(--bp-ink); }
+.bp-segment button.is-active {
+  background: #fff;
+  color: var(--bp-green-dark);
+  box-shadow: 0 1px 3px rgba(12, 22, 18, 0.12);
+}
+
+/* Compact pager controls */
+.bp-pager .bp-btn { height: 2rem; padding: 0 0.7rem; font-size: 0.8rem; }
+.bp-pager-select {
+  height: 2rem;
+  border: 1px solid var(--bp-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: 0 0.4rem;
+  font: inherit;
+  color: var(--bp-ink);
+}

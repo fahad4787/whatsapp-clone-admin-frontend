@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { Alert, DataTable, PageHeader, RefreshButton, StatusBadge, type Column } from "@/components/ui";
+import { Alert, DataTable, FilterBar, PageHeader, RefreshButton, StatusBadge, type Column } from "@/components/ui";
 import { useAdminList } from "@/hooks/useAdminList";
 import {
   banAdminUser,
@@ -147,23 +147,9 @@ export default function UsersPage() {
         }
       />
 
-      <form
-        className="mb-3 flex flex-wrap gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setQuery(draftQ.trim());
-        }}
-      >
-        <input
-          className="bp-input min-w-[220px] flex-1"
-          placeholder="Search phone, name, or user id"
-          value={draftQ}
-          onChange={(e) => setDraftQ(e.target.value)}
-        />
-        <button type="submit" className="bp-btn bp-btn-primary">
-          Search
-        </button>
-      </form>
+      <FilterBar
+        search={{ value: draftQ, onChange: setDraftQ, onSubmit: () => setQuery(draftQ.trim()), placeholder: "Search phone, name, or user id" }}
+      />
 
       <Alert>{actionError ?? error}</Alert>
       <DataTable columns={columns} rows={items} getKey={(u) => u.id} loading={loading} empty="No users found." />

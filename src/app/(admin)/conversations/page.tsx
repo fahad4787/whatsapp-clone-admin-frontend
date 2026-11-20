@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, ChatTranscript, DataTable, PageHeader, RefreshButton, StatusBadge, type Column } from "@/components/ui";
+import { Alert, ChatTranscript, DataTable, FilterBar, PageHeader, RefreshButton, StatusBadge, type Column } from "@/components/ui";
 import { useAdminList } from "@/hooks/useAdminList";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import {
@@ -122,28 +122,10 @@ export default function ConversationsPage() {
       />
       <Alert>{error}</Alert>
 
-      <form
-        className="mb-3 flex flex-wrap gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setQuery(draftQ.trim());
-        }}
-      >
-        <input className="bp-input max-w-xs" placeholder="Search title or id" value={draftQ} onChange={(e) => setDraftQ(e.target.value)} />
-        <button type="submit" className="bp-btn bp-btn-secondary">
-          Search
-        </button>
-        {TYPE_FILTERS.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            className={`bp-btn ${type === f.key ? "bp-btn-primary" : "bp-btn-secondary"}`}
-            onClick={() => setType(f.key)}
-          >
-            {f.label}
-          </button>
-        ))}
-      </form>
+      <FilterBar
+        search={{ value: draftQ, onChange: setDraftQ, onSubmit: () => setQuery(draftQ.trim()), placeholder: "Search title or id" }}
+        segments={{ value: type, options: TYPE_FILTERS.map((f) => ({ value: f.key, label: f.label })), onChange: (v) => setType(v as TypeFilter) }}
+      />
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
         <DataTable
@@ -181,7 +163,7 @@ export default function ConversationsPage() {
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="text-[12px] font-semibold uppercase tracking-wide text-bp-muted">View as</span>
                 <select
-                  className="bp-input !w-auto !py-1"
+                  className="bp-pager-select"
                   value={perspective ?? ""}
                   onChange={(e) => setPerspective(e.target.value)}
                 >

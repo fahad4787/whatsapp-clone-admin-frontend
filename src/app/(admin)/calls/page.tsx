@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Alert, DataTable, PageHeader, StatusBadge, type Column } from "@/components/ui";
+import { Alert, DataTable, FilterBar, PageHeader, StatusBadge, type Column } from "@/components/ui";
 import { useAdminCallsStream } from "@/hooks/useAdminCallsStream";
 import { useAdminList } from "@/hooks/useAdminList";
 import { downloadCsv, fetchAdminCalls, type AdminCallItem } from "@/lib/api";
@@ -16,8 +16,9 @@ const OUTCOME_TONE: Record<string, Tone> = {
   active: "yellow",
 };
 
-const STATUS_OPTIONS = ["ended", "missed", "rejected", "active", "ringing"];
-const MEDIA_OPTIONS = ["audio", "video"];
+const cap = (v: string) => v[0].toUpperCase() + v.slice(1);
+const STATUS_FILTER = [{ value: "", label: "Any status" }, ...["ended", "missed", "rejected", "active", "ringing"].map((v) => ({ value: v, label: cap(v) }))];
+const MEDIA_FILTER = [{ value: "", label: "Any media" }, ...["audio", "video"].map((v) => ({ value: v, label: cap(v) }))];
 
 const COLUMNS: Column<AdminCallItem>[] = [
   { key: "started", header: "Started", className: "whitespace-nowrap", cell: (c) => fmtDateTime(c.started_at) },
@@ -76,39 +77,13 @@ export default function CallHistoryPage() {
         }
       />
 
-      <form
-        className="mb-3 flex flex-wrap gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setApplied((a) => ({ ...a, q: draftQ.trim() }));
-        }}
-      >
-        <input
-          className="bp-input min-w-[200px] flex-1"
-          placeholder="Search phone, name, room, or call id"
-          value={draftQ}
-          onChange={(e) => setDraftQ(e.target.value)}
-        />
-        <select className="bp-input w-auto" value={applied.status} onChange={(e) => setApplied((a) => ({ ...a, status: e.target.value }))}>
-          <option value="">Any status</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s} className="capitalize">
-              {s}
-            </option>
-          ))}
-        </select>
-        <select className="bp-input w-auto" value={applied.media} onChange={(e) => setApplied((a) => ({ ...a, media: e.target.value }))}>
-          <option value="">Any media</option>
-          {MEDIA_OPTIONS.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-        <button type="submit" className="bp-btn bp-btn-primary">
-          Search
-        </button>
-      </form>
+      <FilterBar
+        search={{ value: draftQ, onChange: setDraftQ, onSubmit: () => setApplied((a) => ({ ...a, q: draftQ.trim() })), placeholder: "Search phone, name, room, or call id" }}
+        selects={[
+          { key: "status", value: applied.status, options: STATUS_FILTER, onChange: (status) => setApplied((a) => ({ ...a, status })) },
+          { key: "media", value: applied.media, options: MEDIA_FILTER, onChange: (media) => setApplied((a) => ({ ...a, media })) },
+        ]}
+      />
 
       <Alert>{error}</Alert>
       <DataTable columns={COLUMNS} rows={items} getKey={(c) => c.id} loading={loading} empty="No calls match this filter." />

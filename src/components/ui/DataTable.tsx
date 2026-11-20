@@ -113,7 +113,7 @@ export function DataTable<T>({
             <label className="flex items-center gap-1.5">
               Rows
               <select
-                className="bp-input !w-auto !py-1"
+                className="bp-pager-select"
                 value={size}
                 onChange={(e) => {
                   setSize(Number(e.target.value));

@@ -215,6 +215,10 @@ export function SearchField({
 }
 
 /** Select with chevron outside the text — no clipping. */
+export type SelectOption = string | { value: string; label: string };
+const optValue = (o: SelectOption) => (typeof o === "string" ? o : o.value);
+const optLabel = (o: SelectOption) => (typeof o === "string" ? o : o.label);
+
 export function SelectField({
   options,
   className = "",
@@ -223,14 +227,14 @@ export function SelectField({
   fullWidth = false,
   ...props
 }: {
-  options: string[];
+  options: SelectOption[];
   className?: string;
   value?: string;
   onChange?: (value: string) => void;
   /** Stretch to parent (forms/modals). Toolbar filters stay content-sized. */
   fullWidth?: boolean;
 } & Omit<SelectHTMLAttributes<HTMLSelectElement>, "children" | "value" | "onChange">) {
-  const longest = options.reduce((a, b) => (a.length >= b.length ? a : b), "");
+  const longest = options.map(optLabel).reduce((a, b) => (a.length >= b.length ? a : b), "");
   const minWidth = `calc(${Math.max(longest.length, 10)}ch + 3.25rem)`;
 
   return (
@@ -241,13 +245,13 @@ export function SelectField({
       <span className="sr-only">Filter</span>
       <select
         className={`bp-control-select ${fullWidth ? "w-full" : ""}`}
-        value={value ?? options[0]}
+        value={value ?? optValue(options[0])}
         onChange={(e) => onChange?.(e.target.value)}
         {...props}
       >
         {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
+          <option key={optValue(o)} value={optValue(o)}>
+            {optLabel(o)}
           </option>
         ))}
       </select>
