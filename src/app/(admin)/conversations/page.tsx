@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PageHeader, StatusBadge } from "@/components/ui";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { PageHeader, StatusBadge, SkeletonRows } from "@/components/ui";
 import { STORAGE_KEYS } from "@/config/constants";
 import {
   fetchAdminConversation,
@@ -37,13 +38,11 @@ export default function ConversationsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   const load = useCallback(async (search?: string, filterType?: typeof type) => {
-    setLoading(true);
     setError(null);
     try {
       const token = localStorage.getItem(STORAGE_KEYS.adminToken);
       if (!token) {
         setError("Sign in again to view conversations");
-        setItems([]);
         return;
       }
       const t = filterType ?? type;
@@ -54,7 +53,6 @@ export default function ConversationsPage() {
       setItems(data.items);
     } catch {
       setError("Could not load conversations — check API / admin token");
-      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -64,20 +62,28 @@ export default function ConversationsPage() {
     void load();
   }, [load]);
 
-  async function openDetail(id: string) {
+  async function openDetail(id: string, silent = false) {
     const token = localStorage.getItem(STORAGE_KEYS.adminToken);
     if (!token) return;
-    setDetailLoading(true);
-    setDetail(null);
+    if (!silent) {
+      setDetailLoading(true);
+      setDetail(null);
+    }
     try {
       const data = await fetchAdminConversation(token, id);
       setDetail(data);
     } catch {
-      setError("Could not load conversation detail");
+      if (!silent) setError("Could not load conversation detail");
     } finally {
-      setDetailLoading(false);
+      if (!silent) setDetailLoading(false);
     }
   }
+
+  const openId = detail?.id;
+  useAutoRefresh(async () => {
+    await load(q, type);
+    if (openId) await openDetail(openId, true);
+  }, 8000);
 
   return (
     <div className="bp-page">
@@ -92,7 +98,7 @@ export default function ConversationsPage() {
       />
 
       {error ? (
-        <div className="mb-3 rounded-[var(--radius)] border border-[#f0d4d4] bg-[#fff7f7] px-4 py-2.5 text-sm">
+        <div className="bp-alert">
           {error}
         </div>
       ) : null}
@@ -127,27 +133,23 @@ export default function ConversationsPage() {
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
         <div className="bp-card overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-bp-border bg-[#fafafa] text-[12px] uppercase tracking-wide text-bp-muted">
+          <table className="bp-table">
+            <thead>
               <tr>
-                <th className="px-4 py-3 font-semibold">Conversation</th>
-                <th className="px-4 py-3 font-semibold">Type</th>
-                <th className="px-4 py-3 font-semibold">Members</th>
-                <th className="px-4 py-3 font-semibold">Msgs</th>
-                <th className="px-4 py-3 font-semibold">TTL</th>
-                <th className="px-4 py-3 font-semibold">Last</th>
+                <th>Conversation</th>
+                <th>Type</th>
+                <th>Members</th>
+                <th>Msgs</th>
+                <th>TTL</th>
+                <th>Last</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-bp-muted">
-                    Loading…
-                  </td>
-                </tr>
+                <SkeletonRows cols={6} />
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-bp-muted">
+                  <td colSpan={6} className="bp-empty">
                     No conversations
                   </td>
                 </tr>
@@ -155,25 +157,25 @@ export default function ConversationsPage() {
                 items.map((c) => (
                   <tr
                     key={c.id}
-                    className="cursor-pointer border-b border-bp-border last:border-0 hover:bg-[#f7fbf8]"
+                    className={`is-clickable ${detail?.id === c.id ? "is-selected" : ""}`}
                     onClick={() => void openDetail(c.id)}
                   >
-                    <td className="px-4 py-3">
+                    <td className="max-w-[260px]">
                       <div className="font-semibold text-bp-ink">{c.title}</div>
-                      <div className="mt-0.5 line-clamp-1 text-[12px] text-bp-muted">
+                      <div className="mt-0.5 truncate text-[12px] text-bp-muted">
                         {c.last_message_preview ?? "No messages"}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <StatusBadge
                         label={c.type === "group" ? "Group" : "Direct"}
                         tone={c.type === "group" ? "brown" : "green"}
                       />
                     </td>
-                    <td className="px-4 py-3">{c.member_count}</td>
-                    <td className="px-4 py-3">{c.message_count}</td>
-                    <td className="px-4 py-3">{ttlLabel(c.disappearing_seconds)}</td>
-                    <td className="px-4 py-3 text-[12px] text-bp-muted">
+                    <td>{c.member_count}</td>
+                    <td>{c.message_count}</td>
+                    <td>{ttlLabel(c.disappearing_seconds)}</td>
+                    <td className="whitespace-nowrap text-[12px] text-bp-muted">
                       {fmtWhen(c.last_message_at ?? c.updated_at)}
                     </td>
                   </tr>
@@ -183,7 +185,7 @@ export default function ConversationsPage() {
           </table>
         </div>
 
-        <div className="bp-card p-4">
+        <div className="bp-card p-5 xl:sticky xl:top-20 xl:self-start">
           {detailLoading ? (
             <div className="py-10 text-center text-bp-muted">Loading detail…</div>
           ) : !detail ? (
@@ -191,7 +193,7 @@ export default function ConversationsPage() {
               Select a conversation to inspect members and recent messages.
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
                 <div className="text-lg font-extrabold text-bp-ink">{detail.title}</div>
                 <div className="mt-1 flex flex-wrap gap-2 text-[12px]">
@@ -211,7 +213,7 @@ export default function ConversationsPage() {
                 <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-bp-muted">
                   Members ({detail.members.length})
                 </div>
-                <ul className="space-y-1.5">
+                <ul className="space-y-2.5">
                   {detail.members.map((m) => (
                     <li key={m.user_id} className="flex items-center justify-between text-sm">
                       <span>
@@ -228,33 +230,37 @@ export default function ConversationsPage() {
                 <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-bp-muted">
                   Recent messages
                 </div>
-                <ul className="max-h-[420px] space-y-2 overflow-y-auto">
+                <div className="bp-chat">
                   {detail.messages.length === 0 ? (
-                    <li className="text-sm text-bp-muted">No messages</li>
+                    <div className="py-6 text-center text-sm text-bp-muted">No messages</div>
                   ) : (
-                    detail.messages.map((m) => (
-                      <li
-                        key={m.id}
-                        className="rounded-[var(--radius)] border border-bp-border bg-[#fafafa] px-3 py-2 text-sm"
-                      >
-                        <div className="flex flex-wrap items-center gap-2 text-[12px] text-bp-muted">
-                          <span className="font-semibold text-bp-ink">{m.sender_name}</span>
-                          <span>{m.type}</span>
-                          {m.edited_at ? <span>edited</span> : null}
-                          {m.view_once ? <span>view-once</span> : null}
-                          {m.forwarded ? <span>forwarded</span> : null}
-                          <span className="ml-auto">{fmtWhen(m.created_at)}</span>
-                        </div>
-                        <div className="mt-1 text-bp-ink">
-                          {m.text ||
-                            (m.has_attachment
-                              ? `Attachment${m.attachment_name ? `: ${m.attachment_name}` : ""}`
-                              : "—")}
-                        </div>
-                      </li>
-                    ))
+                    [...detail.messages]
+                      .sort((x, y) => +new Date(x.created_at) - +new Date(y.created_at))
+                      .map((m, i, arr) => {
+                        const newSender = i === 0 || arr[i - 1].sender_name !== m.sender_name;
+                        return (
+                          <div key={m.id} className={`bp-bubble ${newSender && i > 0 ? "bp-bubble--gap" : ""}`}>
+                            {newSender ? (
+                              <div className="mb-0.5 text-[12px] font-bold text-bp-green">{m.sender_name}</div>
+                            ) : null}
+                            <div className="text-bp-ink">
+                              {m.text ||
+                                (m.has_attachment
+                                  ? `📎 ${m.attachment_name ?? m.type}`
+                                  : "—")}
+                            </div>
+                            <div className="bp-bubble-meta">
+                              {m.type !== "text" ? <span>{m.type}</span> : null}
+                              {m.edited_at ? <span>edited</span> : null}
+                              {m.view_once ? <span>view-once</span> : null}
+                              {m.forwarded ? <span>forwarded</span> : null}
+                              <span>{new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                            </div>
+                          </div>
+                        );
+                      })
                   )}
-                </ul>
+                </div>
               </div>
             </div>
           )}

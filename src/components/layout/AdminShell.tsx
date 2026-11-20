@@ -11,10 +11,12 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { PanelLeft, Smartphone, X } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { AivoraLogo } from "@/components/brand";
 import { STORAGE_KEYS } from "@/config/constants";
+import { maybeRefreshAdminSession } from "@/lib/api";
 
 type ShellCtx = {
   collapsed: boolean;
@@ -40,6 +42,34 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [widthReady, setWidthReady] = useState(false);
+  const [authed, setAuthed] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Guard: no token → login (remembering where we were). Then keep the session alive while the tab is in use.
+  useEffect(() => {
+    let token: string | null = null;
+    try {
+      token = localStorage.getItem(STORAGE_KEYS.adminToken);
+    } catch {
+      /* ignore */
+    }
+    if (!token) {
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      return;
+    }
+    setAuthed(true);
+    void maybeRefreshAdminSession();
+    const tick = () => {
+      if (!document.hidden) void maybeRefreshAdminSession();
+    };
+    const id = window.setInterval(tick, 5 * 60_000);
+    window.addEventListener("focus", tick);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", tick);
+    };
+  }, [router, pathname]);
 
   useLayoutEffect(() => {
     let next = false;
@@ -84,6 +114,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
     () => ({ collapsed, mobileOpen, toggleCollapsed, setMobileOpen, widthReady }),
     [collapsed, mobileOpen, toggleCollapsed, widthReady],
   );
+
+  if (!authed) return <div className="min-h-screen" aria-busy="true" />;
 
   return (
     <Ctx.Provider value={value}>

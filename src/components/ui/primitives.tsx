@@ -346,3 +346,20 @@ export function PersonCell({
     </div>
   );
 }
+
+/** Placeholder rows shown only on the very first load of a table. */
+export function SkeletonRows({ cols, rows = 6 }: { cols: number; rows?: number }) {
+  return (
+    <>
+      {Array.from({ length: rows }, (_, r) => (
+        <tr key={r} className="bp-skel-row" aria-hidden>
+          {Array.from({ length: cols }, (_, c) => (
+            <td key={c}>
+              <span className="bp-skel" style={{ width: `${45 + ((r * 7 + c * 13) % 45)}%` }} />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button, PageHeader, TextInput } from "@/components/ui";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { STORAGE_KEYS } from "@/config/constants";
 import {
   createAdminAdmin,
@@ -19,7 +20,6 @@ export default function AdminsPage() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
     setError(null);
     try {
       const token = localStorage.getItem(STORAGE_KEYS.adminToken);
@@ -31,7 +31,6 @@ export default function AdminsPage() {
       setItems(data.items);
     } catch {
       setError("Could not load admins");
-      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -63,6 +62,8 @@ export default function AdminsPage() {
       setBusy(false);
     }
   }
+
+  useAutoRefresh(load, 30000);
 
   return (
     <div className="bp-page">

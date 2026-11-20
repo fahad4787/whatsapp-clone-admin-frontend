@@ -1,74 +1,61 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { PageHeader, StatusBadge } from "@/components/ui";
-import { STORAGE_KEYS } from "@/config/constants";
+import { useCallback, useState } from "react";
+import { Alert, DataTable, PageHeader, StatusBadge, type Column } from "@/components/ui";
 import { useAdminCallsStream } from "@/hooks/useAdminCallsStream";
+import { useAdminList } from "@/hooks/useAdminList";
 import { downloadCsv, fetchAdminCalls, type AdminCallItem } from "@/lib/api";
+import { fmtDateTime, fmtDuration } from "@/lib/format";
 
-function formatWhen(iso: string) {
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
-}
+type Tone = "green" | "yellow" | "red" | "gray";
+const OUTCOME_TONE: Record<string, Tone> = {
+  ended: "green",
+  missed: "red",
+  rejected: "red",
+  ringing: "yellow",
+  active: "yellow",
+};
 
-function formatDuration(sec: number) {
-  if (sec <= 0) return "—";
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
+const STATUS_OPTIONS = ["ended", "missed", "rejected", "active", "ringing"];
+const MEDIA_OPTIONS = ["audio", "video"];
 
-function outcomeTone(status: string): "green" | "yellow" | "red" | "gray" {
-  if (status === "ended") return "green";
-  if (status === "missed" || status === "rejected") return "red";
-  if (status === "ringing" || status === "active") return "yellow";
-  return "gray";
-}
+const COLUMNS: Column<AdminCallItem>[] = [
+  { key: "started", header: "Started", className: "whitespace-nowrap", cell: (c) => fmtDateTime(c.started_at) },
+  { key: "outcome", header: "Outcome", cell: (c) => <StatusBadge label={c.status} tone={OUTCOME_TONE[c.status] ?? "gray"} /> },
+  { key: "type", header: "Type", className: "capitalize", cell: (c) => `${c.media} · ${c.kind}` },
+  {
+    key: "participants",
+    header: "Participants",
+    className: "text-bp-green",
+    cell: (c) => (c.conversation_title ? `${c.conversation_title} · ${c.participants_label}` : c.participants_label),
+  },
+  { key: "duration", header: "Duration", cell: (c) => fmtDuration(c.duration_seconds) },
+  { key: "reason", header: "Reason", className: "text-bp-muted text-sm", cell: (c) => c.end_reason ?? "—" },
+];
 
 export default function CallHistoryPage() {
-  const [items, setItems] = useState<AdminCallItem[]>([]);
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState("");
-  const [media, setMedia] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [draftQ, setDraftQ] = useState("");
+  const [applied, setApplied] = useState({ q: "", status: "", media: "" });
 
-  const load = useCallback(async (opts?: { q?: string; status?: string; media?: string }) => {
-    setError(null);
-    try {
-      const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-      if (!token) {
-        setError("Sign in again to view call history");
-        setItems([]);
-        return;
-      }
-      const data = await fetchAdminCalls(token, {
-        q: opts?.q,
-        status: opts?.status || undefined,
-        media: opts?.media || undefined,
-        limit: 100,
-      });
-      setItems(data.items);
-    } catch {
-      setError("Could not load call history — check API / admin token");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load({ q, status, media });
-    // Initial load only — search form + stream drive later refreshes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount load
-  }, [load]);
-
-  // When any call changes (start/end), refresh history for current filters.
-  useAdminCallsStream(() => {
-    void load({ q, status, media });
+  const fetcher = useCallback(
+    async (t: string) =>
+      (
+        await fetchAdminCalls(t, {
+          q: applied.q || undefined,
+          status: applied.status || undefined,
+          media: applied.media || undefined,
+          limit: 100,
+        })
+      ).items,
+    [applied],
+  );
+  const { items, loading, error, reload } = useAdminList(fetcher, {
+    interval: 30_000,
+    errorMessage: "Could not load call history — check your connection",
   });
+
+  // Calls starting/ending push a refresh immediately.
+  useAdminCallsStream(() => void reload());
 
   function exportCalls() {
     downloadCsv("call-history.csv", [
@@ -81,7 +68,7 @@ export default function CallHistoryPage() {
     <div className="bp-page">
       <PageHeader
         title="Call history"
-        description="Completed, missed, cancelled, and in-progress calls — list updates when calls change."
+        description="Completed, missed, cancelled, and in-progress calls — updates live as calls change."
         actions={
           <button type="button" className="bp-btn bp-btn-secondary" onClick={exportCalls}>
             Export CSV
@@ -93,97 +80,38 @@ export default function CallHistoryPage() {
         className="mb-3 flex flex-wrap gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          void load({ q, status, media });
+          setApplied((a) => ({ ...a, q: draftQ.trim() }));
         }}
       >
         <input
           className="bp-input min-w-[200px] flex-1"
           placeholder="Search phone, name, room, or call id"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
+          value={draftQ}
+          onChange={(e) => setDraftQ(e.target.value)}
         />
-        <select
-          className="bp-input w-auto"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
+        <select className="bp-input w-auto" value={applied.status} onChange={(e) => setApplied((a) => ({ ...a, status: e.target.value }))}>
           <option value="">Any status</option>
-          <option value="ended">Ended</option>
-          <option value="missed">Missed</option>
-          <option value="rejected">Rejected</option>
-          <option value="active">Active</option>
-          <option value="ringing">Ringing</option>
+          {STATUS_OPTIONS.map((s) => (
+            <option key={s} value={s} className="capitalize">
+              {s}
+            </option>
+          ))}
         </select>
-        <select
-          className="bp-input w-auto"
-          value={media}
-          onChange={(e) => setMedia(e.target.value)}
-        >
+        <select className="bp-input w-auto" value={applied.media} onChange={(e) => setApplied((a) => ({ ...a, media: e.target.value }))}>
           <option value="">Any media</option>
-          <option value="audio">Audio</option>
-          <option value="video">Video</option>
+          {MEDIA_OPTIONS.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
         </select>
         <button type="submit" className="bp-btn bp-btn-primary">
           Search
         </button>
       </form>
 
-      {error ? (
-        <div className="mb-3 rounded-[var(--radius)] border border-[#f0d4d4] bg-[#fff7f7] px-4 py-2.5 text-sm">
-          {error}
-        </div>
-      ) : null}
-
-      <div className="bp-card overflow-hidden">
-        <table className="bp-table">
-          <thead>
-            <tr>
-              <th>Started</th>
-              <th>Outcome</th>
-              <th>Type</th>
-              <th>Participants</th>
-              <th>Duration</th>
-              <th>Reason</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && items.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="text-bp-muted">
-                  Loading…
-                </td>
-              </tr>
-            ) : null}
-            {!loading && items.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="text-bp-muted">
-                  No calls match this filter.
-                </td>
-              </tr>
-            ) : null}
-            {items.map((c) => (
-              <tr key={c.id}>
-                <td className="whitespace-nowrap">{formatWhen(c.started_at)}</td>
-                <td>
-                  <StatusBadge label={c.status} tone={outcomeTone(c.status)} />
-                </td>
-                <td className="capitalize">
-                  {c.media} · {c.kind}
-                </td>
-                <td>
-                  <span className="text-bp-green">
-                    {c.conversation_title
-                      ? `${c.conversation_title} · ${c.participants_label}`
-                      : c.participants_label}
-                  </span>
-                </td>
-                <td>{formatDuration(c.duration_seconds)}</td>
-                <td className="text-bp-muted text-sm">{c.end_reason ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Alert>{error}</Alert>
+      <DataTable columns={COLUMNS} rows={items} getKey={(c) => c.id} loading={loading} empty="No calls match this filter." />
     </div>
   );
 }

@@ -1,12 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Copy, Download, Eye, EyeOff, Lock, ShieldCheck, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui";
 import { AivoraBrand, AivoraLogo } from "@/components/brand";
 import { APP, STORAGE_KEYS } from "@/config/constants";
-import { adminLogin } from "@/lib/api";
+import { adminLogin, adminTotpLogin, saveAdminToken, type AdminLoginResult } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,17 +17,59 @@ export default function LoginPage() {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [ticket, setTicket] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+
+  function nextPath() {
+    const n = new URLSearchParams(window.location.search).get("next");
+    return n && n.startsWith("/") && !n.startsWith("//") && n !== "/login" ? n : "/";
+  }
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("expired")) {
+      setError("Your session expired — please sign in again.");
+    } else if (localStorage.getItem(STORAGE_KEYS.adminToken)) {
+      router.replace(nextPath());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
+  }, []);
+
+  function finish(result: AdminLoginResult) {
+    if (result.status === "ok") {
+      saveAdminToken(result.access);
+      router.replace(nextPath());
+      return;
+    }
+    if (result.status === "totp_required") {
+      setTicket(result.ticket);
+      setBusy(false);
+      return;
+    }
+    setError("This account must enrol in 2FA — finish enrolment from the Aivora admin first.");
+    setBusy(false);
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const result = await adminLogin(email.trim(), password);
-      localStorage.setItem(STORAGE_KEYS.adminSession, "1");
-      localStorage.setItem(STORAGE_KEYS.adminToken, result.access);
-      router.push("/");
-    } catch {
-      setError("Invalid email or password");
+      finish(ticket ? await adminTotpLogin(ticket, code.trim()) : await adminLogin(email.trim(), password));
+    } catch (err) {
+      const m = err instanceof Error ? err.message : "";
+      setError(
+        m === "ip_blocked"
+          ? "This IP address isn't allowed to access the console."
+          : m === "login_locked"
+            ? "Too many attempts — try again in a few minutes."
+            : m === "invalid_code"
+              ? "That code is wrong or expired."
+              : ticket
+                ? "Verification failed — start again."
+                : m === "invalid_credentials"
+                  ? "Invalid email or password"
+                  : "Can't reach the server — it may be waking up. Try again in a few seconds.",
+      );
       setBusy(false);
     }
   }
@@ -105,19 +147,35 @@ export default function LoginPage() {
               </p>
             </div>
 
-            <label className="block text-sm font-semibold text-bp-ink">
+            {ticket ? (
+              <label className="block text-sm font-semibold text-bp-ink">
+                6-digit authenticator code
+                <input
+                  className="bp-input mt-2 text-center text-lg tracking-[0.4em]"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  autoFocus
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  required
+                />
+              </label>
+            ) : null}
+
+            <label className={`block text-sm font-semibold text-bp-ink ${ticket ? "hidden" : ""}`}>
               Email or username
               <input
                 className="bp-input mt-2"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required
+                required={!ticket}
                 autoComplete="username"
                 placeholder="admin@aivora.dev"
               />
             </label>
 
-            <label className="mt-4 block text-sm font-semibold text-bp-ink">
+            <label className={`mt-4 block text-sm font-semibold text-bp-ink ${ticket ? "hidden" : ""}`}>
               Password
               <div className="relative mt-2">
                 <input
@@ -125,7 +183,7 @@ export default function LoginPage() {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  required
+                  required={!ticket}
                   autoComplete="current-password"
                   placeholder="Enter your password"
                 />
@@ -140,14 +198,6 @@ export default function LoginPage() {
               </div>
             </label>
 
-            <div className="mt-3 flex items-center justify-between gap-3 text-[13px]">
-              <label className="inline-flex cursor-pointer items-center gap-2 font-medium text-bp-muted">
-                <input type="checkbox" className="bp-check" defaultChecked />
-                Keep me signed in
-              </label>
-              <span className="font-medium text-bp-muted/70">Forgot password?</span>
-            </div>
-
             {error ? (
               <p className="mt-4 text-sm font-medium text-red-600">{error}</p>
             ) : null}
@@ -156,9 +206,6 @@ export default function LoginPage() {
               {busy ? "Signing in…" : "Sign in to console"}
             </Button>
 
-            <p className="mt-4 text-center text-xs leading-relaxed text-bp-muted">
-              Staging: admin@aivora.dev — password from seed / Render env.
-            </p>
           </form>
 
           <section className="bp-card mt-4 p-6 sm:p-7">

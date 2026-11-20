@@ -62,7 +62,7 @@ export default function LiveCallsPage() {
       />
 
       {error ? (
-        <div className="mb-3 rounded-[var(--radius)] border border-[#f0d4d4] bg-[#fff7f7] px-4 py-2.5 text-sm">
+        <div className="bp-alert">
           {error}
         </div>
       ) : null}
@@ -83,14 +83,14 @@ export default function LiveCallsPage() {
           <tbody>
             {!live && items.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-bp-muted">
+                <td colSpan={7} className="bp-empty">
                   Connecting to live feed…
                 </td>
               </tr>
             ) : null}
             {live && items.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-bp-muted">
+                <td colSpan={7} className="bp-empty">
                   No calls in progress. When someone places a call, it shows up here.
                 </td>
               </tr>

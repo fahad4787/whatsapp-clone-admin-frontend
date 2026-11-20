@@ -23,6 +23,23 @@ export function apiBaseUrl(): string {
   return (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080").replace(/\/$/, "");
 }
 
+let redirecting = false;
+
+/** fetch for authenticated admin calls: a 401 means the session is gone — go to login once, keeping the page. */
+export async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  const res = await apiFetch(input, init);
+  if (res.status === 401 && typeof window !== "undefined" && !redirecting) {
+    const headers = new Headers(init?.headers);
+    if (headers.get("Authorization")?.startsWith("Bearer ") && !input.includes("/auth/")) {
+      redirecting = true;
+      clearAdminSession();
+      const next = encodeURIComponent(window.location.pathname);
+      window.location.replace(`/login?next=${next}&expired=1`);
+    }
+  }
+  return res;
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -64,24 +81,75 @@ export async function fetchBackendHealth(
   }
 }
 
-export async function adminLogin(email: string, password: string) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/auth/login`, {
+export type AdminLoginResult =
+  | { status: "ok"; access: string; admin: { id: string; email: string; display_name: string | null; role: string } }
+  | { status: "totp_required" | "totp_enrollment_required"; ticket: string };
+
+async function authPost(path: string, body: unknown, token?: string): Promise<AdminLoginResult> {
+  const res = await fetch(`${apiBaseUrl()}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ email, password }),
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
   });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data?.error ?? "login_failed");
+  const data = (await readJson(res)) as Record<string, unknown> | null;
+  if (!res.ok) throw new ApiError(res.status, errorMessage(data, "login_failed"));
+  if (data && typeof data.access === "string") return { status: "ok", ...(data as object) } as AdminLoginResult;
+  return data as AdminLoginResult;
+}
+
+export const adminLogin = (email: string, password: string) =>
+  authPost("/api/admin/auth/login", { email, password });
+
+export const adminTotpLogin = (ticket: string, code: string) =>
+  authPost("/api/admin/auth/totp", { code }, ticket);
+
+/** Persist a freshly issued admin token. */
+export function saveAdminToken(token: string) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.adminSession, "1");
+    localStorage.setItem(STORAGE_KEYS.adminToken, token);
+  } catch {
+    /* ignore */
   }
-  return data as {
-    access: string;
-    admin: { id: string; email: string; display_name: string | null; role: string };
-  };
+}
+
+function tokenTimes(token: string): { iat: number; exp: number } | null {
+  try {
+    const b = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const p = JSON.parse(atob(b)) as { iat?: number; exp?: number };
+    return p.exp ? { iat: p.iat ?? p.exp - 8 * 3600, exp: p.exp } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Renew the session once half of its lifetime is gone. Network blips are ignored (retried next tick). */
+export async function maybeRefreshAdminSession(): Promise<void> {
+  const token = localStorage.getItem(STORAGE_KEYS.adminToken);
+  if (!token) return;
+  const t = tokenTimes(token);
+  if (!t) return;
+  const now = Date.now() / 1000;
+  if (now - t.iat < (t.exp - t.iat) / 2) return;
+  try {
+    const res = await apiFetch(`${apiBaseUrl()}/api/admin/auth/refresh`, {
+      method: "POST",
+      headers: adminHeaders(token),
+    });
+    if (!res.ok) return;
+    const data = (await readJson(res)) as { access?: string } | null;
+    if (data?.access) saveAdminToken(data.access);
+  } catch {
+    /* offline / cold start — try again later */
+  }
 }
 
 export async function fetchAdminOtps(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/otps?limit=50`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/otps?limit=50`, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
     signal,
     cache: "no-store",
@@ -230,7 +298,7 @@ function adminHeaders(token: string): HeadersInit {
 export async function fetchAdminUsers(token: string, q?: string, signal?: AbortSignal) {
   const params = new URLSearchParams({ limit: "100" });
   if (q?.trim()) params.set("q", q.trim());
-  const res = await fetch(`${apiBaseUrl()}/api/admin/users?${params}`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/users?${params}`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -241,7 +309,7 @@ export async function fetchAdminUsers(token: string, q?: string, signal?: AbortS
 }
 
 export async function banAdminUser(token: string, userId: string, reason?: string) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/users/${userId}/ban`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/users/${userId}/ban`, {
     method: "POST",
     headers: { ...adminHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify({ reason }),
@@ -252,7 +320,7 @@ export async function banAdminUser(token: string, userId: string, reason?: strin
 }
 
 export async function unbanAdminUser(token: string, userId: string) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/users/${userId}/unban`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/users/${userId}/unban`, {
     method: "POST",
     headers: adminHeaders(token),
   });
@@ -262,7 +330,7 @@ export async function unbanAdminUser(token: string, userId: string) {
 }
 
 export async function deleteAdminUser(token: string, userId: string) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/users/${userId}`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/users/${userId}`, {
     method: "DELETE",
     headers: adminHeaders(token),
   });
@@ -274,7 +342,7 @@ export async function deleteAdminUser(token: string, userId: string) {
 export async function fetchAdminReports(token: string, status?: string, signal?: AbortSignal) {
   const params = new URLSearchParams({ limit: "100" });
   if (status) params.set("status", status);
-  const res = await fetch(`${apiBaseUrl()}/api/admin/reports?${params}`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/reports?${params}`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -290,7 +358,7 @@ export async function resolveAdminReport(
   action: "resolve" | "dismiss",
   opts?: { note?: string; ban_user?: boolean },
 ) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/reports/${reportId}/resolve`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/reports/${reportId}/resolve`, {
     method: "POST",
     headers: { ...adminHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -305,7 +373,7 @@ export async function resolveAdminReport(
 }
 
 export async function fetchAdminMetrics(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/metrics`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/metrics`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -323,7 +391,7 @@ export async function fetchAdminConversations(
   const params = new URLSearchParams({ limit: "100" });
   if (opts?.q?.trim()) params.set("q", opts.q.trim());
   if (opts?.type) params.set("type", opts.type);
-  const res = await fetch(`${apiBaseUrl()}/api/admin/conversations?${params}`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/conversations?${params}`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -338,7 +406,7 @@ export async function fetchAdminConversation(
   id: string,
   signal?: AbortSignal,
 ) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/conversations/${id}?limit=50`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/conversations/${id}?limit=50`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -359,7 +427,7 @@ export function clearAdminSession() {
 }
 
 export async function fetchAdminLiveCalls(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/calls/live`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/calls/live`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -378,7 +446,7 @@ export async function fetchAdminCalls(
   if (opts?.q?.trim()) params.set("q", opts.q.trim());
   if (opts?.status?.trim()) params.set("status", opts.status.trim());
   if (opts?.media?.trim()) params.set("media", opts.media.trim());
-  const res = await fetch(`${apiBaseUrl()}/api/admin/calls?${params}`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/calls?${params}`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -389,7 +457,7 @@ export async function fetchAdminCalls(
 }
 
 export async function endAdminCall(token: string, callId: string) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/calls/${callId}/end`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/calls/${callId}/end`, {
     method: "POST",
     headers: adminHeaders(token),
   });
@@ -447,7 +515,7 @@ export type AdminAdminItem = {
 };
 
 export async function fetchAdminSettings(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/settings`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/settings`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -458,7 +526,7 @@ export async function fetchAdminSettings(token: string, signal?: AbortSignal) {
 }
 
 export async function putAdminSettings(token: string, patch: Partial<AdminSettingsDto>) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/settings`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/settings`, {
     method: "PUT",
     headers: { ...adminHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(patch),
@@ -469,7 +537,7 @@ export async function putAdminSettings(token: string, patch: Partial<AdminSettin
 }
 
 export async function fetchAdminCountries(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/countries`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/countries`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -484,7 +552,7 @@ export async function updateAdminCountry(
   iso: string,
   patch: { enabled?: boolean; name?: string; dial?: string; sort_order?: number },
 ) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/countries/${encodeURIComponent(iso)}`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/countries/${encodeURIComponent(iso)}`, {
     method: "PUT",
     headers: { ...adminHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(patch),
@@ -495,7 +563,7 @@ export async function updateAdminCountry(
 }
 
 export async function fetchAdminAudit(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/audit?limit=100`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/audit?limit=100`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -506,7 +574,7 @@ export async function fetchAdminAudit(token: string, signal?: AbortSignal) {
 }
 
 export async function fetchAdminAdmins(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/admins`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/admins`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -520,7 +588,7 @@ export async function createAdminAdmin(
   token: string,
   body: { email: string; password: string; display_name?: string; role?: "SUPER" | "MOD" },
 ) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/admins`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/admins`, {
     method: "POST",
     headers: { ...adminHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -561,7 +629,7 @@ export type AdminStickerPackItem = {
 };
 
 export async function fetchAdminChannels(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/channels`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/channels`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -575,7 +643,7 @@ export async function createAdminChannel(
   token: string,
   body: { name: string; slug?: string; description?: string; verified?: boolean; listed?: boolean },
 ) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/channels`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/channels`, {
     method: "POST",
     headers: { ...adminHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -590,7 +658,7 @@ export async function patchAdminChannel(
   id: string,
   patch: { name?: string; description?: string | null; verified?: boolean; listed?: boolean },
 ) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/channels/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/channels/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { ...adminHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(patch),
@@ -601,7 +669,7 @@ export async function patchAdminChannel(
 }
 
 export async function deleteAdminChannel(token: string, id: string) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/channels/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/channels/${encodeURIComponent(id)}`, {
     method: "DELETE",
     headers: adminHeaders(token),
   });
@@ -611,7 +679,7 @@ export async function deleteAdminChannel(token: string, id: string) {
 }
 
 export async function fetchAdminChannelPosts(token: string, id: string, signal?: AbortSignal) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/channels/${encodeURIComponent(id)}/posts`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/channels/${encodeURIComponent(id)}/posts`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -622,7 +690,7 @@ export async function fetchAdminChannelPosts(token: string, id: string, signal?:
 }
 
 export async function hideAdminChannelPost(token: string, channelId: string, postId: string) {
-  const res = await fetch(
+  const res = await apiFetch(
     `${apiBaseUrl()}/api/admin/channels/${encodeURIComponent(channelId)}/posts/${encodeURIComponent(postId)}`,
     { method: "DELETE", headers: adminHeaders(token) },
   );
@@ -632,7 +700,7 @@ export async function hideAdminChannelPost(token: string, channelId: string, pos
 }
 
 export async function fetchAdminStickers(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/stickers`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/stickers`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -643,7 +711,7 @@ export async function fetchAdminStickers(token: string, signal?: AbortSignal) {
 }
 
 export async function fetchAdminFirewall(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/firewall`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/firewall`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -654,7 +722,7 @@ export async function fetchAdminFirewall(token: string, signal?: AbortSignal) {
 }
 
 export async function putAdminFirewall(token: string, allowlist: string[]) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/firewall`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/firewall`, {
     method: "PUT",
     headers: { ...adminHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify({ allowlist }),
@@ -670,7 +738,7 @@ export type AdminLegalDocs = {
 };
 
 export async function fetchAdminLegal(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/legal`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/legal`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -681,7 +749,7 @@ export async function fetchAdminLegal(token: string, signal?: AbortSignal) {
 }
 
 export async function putAdminLegal(token: string, body: AdminLegalDocs) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/legal`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/legal`, {
     method: "PUT",
     headers: { ...adminHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -701,7 +769,7 @@ export type AdminSecuritySettings = {
 };
 
 export async function fetchAdminSecurity(token: string, signal?: AbortSignal) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/security`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/security`, {
     headers: adminHeaders(token),
     signal,
     cache: "no-store",
@@ -715,7 +783,7 @@ export async function putAdminSecurity(
   token: string,
   body: Partial<Omit<AdminSecuritySettings, "note">>,
 ) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/security`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/security`, {
     method: "PUT",
     headers: { ...adminHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -726,7 +794,7 @@ export async function putAdminSecurity(
 }
 
 export async function createAdminUser(token: string, phone: string, displayName?: string) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/users`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/users`, {
     method: "POST",
     headers: { ...adminHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify({ phone, display_name: displayName || undefined }),
@@ -737,7 +805,7 @@ export async function createAdminUser(token: string, phone: string, displayName?
 }
 
 export async function generateAdminOtp(token: string, phone: string) {
-  const res = await fetch(`${apiBaseUrl()}/api/admin/otps/generate`, {
+  const res = await apiFetch(`${apiBaseUrl()}/api/admin/otps/generate`, {
     method: "POST",
     headers: { ...adminHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify({ phone }),
@@ -760,4 +828,13 @@ export function downloadCsv(filename: string, rows: (string | number | null | un
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** Current admin bearer token (null when signed out or storage is unavailable). */
+export function getAdminToken(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.adminToken);
+  } catch {
+    return null;
+  }
 }

@@ -1,62 +1,66 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { PageHeader, StatusBadge } from "@/components/ui";
-import { STORAGE_KEYS } from "@/config/constants";
-import { fetchAdminOtps, generateAdminOtp, type AdminOtpItem } from "@/lib/api";
+import { useCallback, useMemo, useState } from "react";
+import { Alert, DataTable, PageHeader, RefreshButton, StatusBadge, type Column } from "@/components/ui";
+import { useAdminList } from "@/hooks/useAdminList";
+import { fetchAdminOtps, generateAdminOtp, getAdminToken, type AdminOtpItem } from "@/lib/api";
+import { fmtDateTime, fmtTime } from "@/lib/format";
 
-function tone(status: string): "green" | "yellow" | "red" | "gray" {
-  if (status === "Used") return "green";
-  if (status === "Pending") return "yellow";
-  if (status === "Failed") return "red";
-  return "gray";
-}
+type Tone = "green" | "yellow" | "red" | "gray";
+const STATUS_TONE: Record<string, Tone> = { Used: "green", Pending: "yellow", Failed: "red" };
 
 export default function OtpsPage() {
-  const [items, setItems] = useState<AdminOtpItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-      if (!token) {
-        setError("Sign in again to view OTP codes");
-        setItems([]);
-        return;
-      }
-      const data = await fetchAdminOtps(token);
-      setItems(data.items);
-    } catch {
-      setError("Could not load OTP codes — check API / admin token");
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-    const t = window.setInterval(() => void load(), 10_000);
-    return () => window.clearInterval(t);
-  }, [load]);
+  const fetcher = useCallback(async (t: string) => (await fetchAdminOtps(t)).items, []);
+  const { items, loading, error, reload } = useAdminList(fetcher, {
+    interval: 12_000,
+    errorMessage: "Could not load OTP codes — check your connection",
+  });
 
   async function generate() {
     const phone = window.prompt("Phone in international format, e.g. +923001234567");
-    if (!phone) return;
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-    if (!token) return;
+    const token = getAdminToken();
+    if (!phone || !token) return;
     try {
       const r = await generateAdminOtp(token, phone.trim());
+      setActionError(null);
       window.alert(`Code for ${r.phone}: ${r.code}`);
-      void load();
+      void reload();
     } catch {
-      setError("Could not generate code — check the phone number (+countrycode…)");
+      setActionError("Could not generate code — check the phone number (+countrycode…)");
     }
   }
+
+  const columns = useMemo<Column<AdminOtpItem>[]>(
+    () => [
+      { key: "created", header: "Requested", className: "whitespace-nowrap", cell: (o) => fmtDateTime(o.created_at) },
+      { key: "phone", header: "Phone", className: "text-bp-green", cell: (o) => o.phone },
+      {
+        key: "code",
+        header: "Code",
+        className: "font-mono text-sm",
+        cell: (o) =>
+          o.code ? (
+            <button
+              type="button"
+              className="text-left font-mono"
+              title="Click to reveal / hide"
+              onClick={() => setRevealed((r) => ({ ...r, [o.id]: !r[o.id] }))}
+            >
+              {revealed[o.id] ? o.code : "••••••"}
+            </button>
+          ) : (
+            <span className="text-bp-muted">—</span>
+          ),
+      },
+      { key: "status", header: "Status", cell: (o) => <StatusBadge label={o.status} tone={STATUS_TONE[o.status] ?? "gray"} /> },
+      { key: "attempts", header: "Attempts", cell: (o) => o.attempts },
+      { key: "expires", header: "Expires", className: "whitespace-nowrap text-bp-muted", cell: (o) => fmtTime(o.expires_at) },
+    ],
+    [revealed],
+  );
 
   return (
     <div className="bp-page">
@@ -65,83 +69,21 @@ export default function OtpsPage() {
         description="Dev codes from the shared API. Copy a code into the Android app to sign in."
         actions={
           <div className="flex gap-2">
-            <button type="button" className="bp-btn bp-btn-secondary" onClick={() => void load()}>
-              Refresh
-            </button>
+            <RefreshButton onClick={() => void reload()} />
             <button type="button" className="bp-btn bp-btn-primary" onClick={() => void generate()}>
               Generate code
             </button>
           </div>
         }
       />
-
-      {error ? (
-        <div className="mb-3 rounded-[var(--radius)] border border-[#f0d4d4] bg-[#fff7f7] px-4 py-2.5 text-sm">
-          {error}
-        </div>
-      ) : null}
-
-      <div className="bp-card overflow-hidden">
-        <table className="bp-table">
-          <thead>
-            <tr>
-              <th>Requested</th>
-              <th>Phone</th>
-              <th>Code</th>
-              <th>Status</th>
-              <th>Attempts</th>
-              <th>Expires</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={6} className="text-bp-muted">
-                  Loading…
-                </td>
-              </tr>
-            ) : items.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="text-bp-muted">
-                  No OTP requests yet. Request one from the Android app.
-                </td>
-              </tr>
-            ) : (
-              items.map((o) => (
-                <tr key={o.id}>
-                  <td className="whitespace-nowrap">
-                    {new Date(o.created_at).toLocaleString()}
-                  </td>
-                  <td className="text-bp-green">{o.phone}</td>
-                  <td className="font-mono text-sm">
-                    {o.code ? (
-                      <button
-                        type="button"
-                        className="text-left font-mono"
-                        onClick={() =>
-                          setRevealed((r) => ({ ...r, [o.id]: !r[o.id] }))
-                        }
-                        title="Click to reveal / hide"
-                      >
-                        {revealed[o.id] ? o.code : "••••••"}
-                      </button>
-                    ) : (
-                      <span className="text-bp-muted">—</span>
-                    )}
-                  </td>
-                  <td>
-                    <StatusBadge label={o.status} tone={tone(o.status)} />
-                  </td>
-                  <td>{o.attempts}</td>
-                  <td className="whitespace-nowrap text-bp-muted">
-                    {new Date(o.expires_at).toLocaleTimeString()}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Alert>{actionError ?? error}</Alert>
+      <DataTable
+        columns={columns}
+        rows={items}
+        getKey={(o) => o.id}
+        loading={loading}
+        empty="No OTP requests yet. Request one from the Android app."
+      />
     </div>
   );
 }

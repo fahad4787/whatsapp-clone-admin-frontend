@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { STORAGE_KEYS } from "@/config/constants";
 import {
@@ -25,7 +26,6 @@ export default function ChannelsPage() {
   const [postsLoading, setPostsLoading] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
     setError(null);
     try {
       const token = localStorage.getItem(STORAGE_KEYS.adminToken);
@@ -37,7 +37,6 @@ export default function ChannelsPage() {
       setItems(data.items);
     } catch {
       setError("Could not load channels");
-      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -137,6 +136,8 @@ export default function ChannelsPage() {
       setError("Hide post failed");
     }
   }
+
+  useAutoRefresh(load, 30000);
 
   return (
     <div className="bp-page">

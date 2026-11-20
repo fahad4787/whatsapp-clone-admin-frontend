@@ -1,60 +1,81 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { PageHeader, StatusBadge } from "@/components/ui";
-import { STORAGE_KEYS } from "@/config/constants";
+import { useCallback, useMemo, useState } from "react";
+import { Alert, DataTable, PageHeader, RefreshButton, StatusBadge, type Column } from "@/components/ui";
+import { useAdminList } from "@/hooks/useAdminList";
 import {
   banAdminUser,
   createAdminUser,
-  downloadCsv,
   deleteAdminUser,
+  downloadCsv,
   fetchAdminUsers,
+  getAdminToken,
   unbanAdminUser,
   type AdminUserItem,
 } from "@/lib/api";
+import { fmtDate, fmtDateTime } from "@/lib/format";
 
 export default function UsersPage() {
-  const [items, setItems] = useState<AdminUserItem[]>([]);
-  const [q, setQ] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [draftQ, setDraftQ] = useState("");
+  const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const load = useCallback(async (search?: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-      if (!token) {
-        setError("Sign in again to manage users");
-        setItems([]);
-        return;
+  const fetcher = useCallback(async (t: string) => (await fetchAdminUsers(t, query || undefined)).items, [query]);
+  const { items, setItems, loading, error, reload } = useAdminList(fetcher, {
+    interval: 12_000,
+    errorMessage: "Could not load users — check your connection",
+  });
+
+  /** Runs a per-row mutation with shared busy/error handling. */
+  const mutate = useCallback(
+    async (user: AdminUserItem, failMsg: string, run: (token: string) => Promise<void>) => {
+      const token = getAdminToken();
+      if (!token) return;
+      setBusyId(user.id);
+      setActionError(null);
+      try {
+        await run(token);
+      } catch {
+        setActionError(failMsg);
+      } finally {
+        setBusyId(null);
       }
-      const data = await fetchAdminUsers(token, search);
-      setItems(data.items);
-    } catch {
-      setError("Could not load users — check API / admin token");
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const toggleBan = useCallback(
+    (user: AdminUserItem) =>
+      mutate(user, user.banned ? "Unban failed" : "Ban failed", async (t) => {
+        const updated = user.banned ? await unbanAdminUser(t, user.id) : await banAdminUser(t, user.id, "Banned from admin");
+        setItems((list) => list.map((u) => (u.id === user.id ? updated : u)));
+      }),
+    [mutate, setItems],
+  );
+
+  const removeUser = useCallback(
+    (user: AdminUserItem) => {
+      if (!window.confirm(`Delete ${user.phone}? This cannot be undone.`)) return;
+      return mutate(user, "Delete failed", async (t) => {
+        await deleteAdminUser(t, user.id);
+        setItems((list) => list.filter((u) => u.id !== user.id));
+      });
+    },
+    [mutate, setItems],
+  );
 
   async function addUser() {
     const phone = window.prompt("Phone in international format, e.g. +923001234567");
-    if (!phone) return;
+    const token = getAdminToken();
+    if (!phone || !token) return;
     const name = window.prompt("Display name (optional)") ?? "";
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-    if (!token) return;
     try {
       const u = await createAdminUser(token, phone.trim(), name.trim());
+      setActionError(null);
       setItems((list) => [u, ...list]);
     } catch (e) {
-      setError(e instanceof Error && e.message === "phone_taken" ? "That phone already exists" : "Create failed — use +countrycode number");
+      setActionError(e instanceof Error && e.message === "phone_taken" ? "That phone already exists" : "Create failed — use +countrycode number");
     }
   }
 
@@ -65,36 +86,48 @@ export default function UsersPage() {
     ]);
   }
 
-  async function toggleBan(user: AdminUserItem) {
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-    if (!token) return;
-    setBusyId(user.id);
-    try {
-      const updated = user.banned
-        ? await unbanAdminUser(token, user.id)
-        : await banAdminUser(token, user.id, "Banned from admin");
-      setItems((list) => list.map((u) => (u.id === user.id ? updated : u)));
-    } catch {
-      setError(user.banned ? "Unban failed" : "Ban failed");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function removeUser(user: AdminUserItem) {
-    if (!window.confirm(`Delete ${user.phone}? This cannot be undone.`)) return;
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-    if (!token) return;
-    setBusyId(user.id);
-    try {
-      await deleteAdminUser(token, user.id);
-      setItems((list) => list.filter((u) => u.id !== user.id));
-    } catch {
-      setError("Delete failed");
-    } finally {
-      setBusyId(null);
-    }
-  }
+  const columns = useMemo<Column<AdminUserItem>[]>(
+    () => [
+      { key: "joined", header: "Joined", className: "whitespace-nowrap text-bp-muted", cell: (u) => fmtDate(u.created_at) },
+      { key: "phone", header: "Phone", className: "text-bp-green", cell: (u) => u.phone },
+      { key: "name", header: "Name", cell: (u) => u.display_name || "—" },
+      { key: "chats", header: "Chats", cell: (u) => u.conversation_count },
+      { key: "seen", header: "Last seen", className: "whitespace-nowrap text-[12px] text-bp-muted", cell: (u) => fmtDateTime(u.last_seen_at) },
+      {
+        key: "privacy",
+        header: "Privacy",
+        className: "text-[12px] text-bp-muted",
+        cell: (u) => (
+          <>
+            seen:{u.last_seen_privacy || "everyone"}
+            <br />
+            online:{u.online_privacy || "everyone"}
+          </>
+        ),
+      },
+      {
+        key: "status",
+        header: "Status",
+        cell: (u) => <StatusBadge label={u.banned ? "Banned" : "Active"} tone={u.banned ? "red" : "green"} />,
+      },
+      {
+        key: "actions",
+        header: "",
+        align: "right",
+        cell: (u) => (
+          <div className="flex justify-end gap-2">
+            <button type="button" className="bp-btn bp-btn-secondary" disabled={busyId === u.id} onClick={() => void toggleBan(u)}>
+              {u.banned ? "Unban" : "Ban"}
+            </button>
+            <button type="button" className="bp-btn bp-btn-secondary" disabled={busyId === u.id} onClick={() => void removeUser(u)}>
+              Delete
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [busyId, toggleBan, removeUser],
+  );
 
   return (
     <div className="bp-page">
@@ -106,9 +139,7 @@ export default function UsersPage() {
             <button type="button" className="bp-btn bp-btn-secondary" onClick={exportUsers}>
               Export CSV
             </button>
-            <button type="button" className="bp-btn bp-btn-secondary" onClick={() => void load(q)}>
-              Refresh
-            </button>
+            <RefreshButton onClick={() => void reload()} />
             <button type="button" className="bp-btn bp-btn-primary" onClick={() => void addUser()}>
               Create user
             </button>
@@ -120,102 +151,22 @@ export default function UsersPage() {
         className="mb-3 flex flex-wrap gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          void load(q);
+          setQuery(draftQ.trim());
         }}
       >
         <input
           className="bp-input min-w-[220px] flex-1"
           placeholder="Search phone, name, or user id"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
+          value={draftQ}
+          onChange={(e) => setDraftQ(e.target.value)}
         />
         <button type="submit" className="bp-btn bp-btn-primary">
           Search
         </button>
       </form>
 
-      {error ? (
-        <div className="mb-3 rounded-[var(--radius)] border border-[#f0d4d4] bg-[#fff7f7] px-4 py-2.5 text-sm">
-          {error}
-        </div>
-      ) : null}
-
-      <div className="bp-card overflow-hidden">
-        <table className="bp-table">
-          <thead>
-            <tr>
-              <th>Joined</th>
-              <th>Phone</th>
-              <th>Name</th>
-              <th>Chats</th>
-              <th>Last seen</th>
-              <th>Privacy</th>
-              <th>Status</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={8} className="text-bp-muted">
-                  Loading…
-                </td>
-              </tr>
-            ) : items.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="text-bp-muted">
-                  No users found.
-                </td>
-              </tr>
-            ) : (
-              items.map((u) => (
-                <tr key={u.id}>
-                  <td className="whitespace-nowrap text-bp-muted">
-                    {new Date(u.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="text-bp-green">{u.phone}</td>
-                  <td>{u.display_name || "—"}</td>
-                  <td>{u.conversation_count}</td>
-                  <td className="whitespace-nowrap text-[12px] text-bp-muted">
-                    {u.last_seen_at ? new Date(u.last_seen_at).toLocaleString() : "—"}
-                  </td>
-                  <td className="text-[12px] text-bp-muted">
-                    seen:{u.last_seen_privacy || "everyone"}
-                    <br />
-                    online:{u.online_privacy || "everyone"}
-                  </td>
-                  <td>
-                    <StatusBadge
-                      label={u.banned ? "Banned" : "Active"}
-                      tone={u.banned ? "red" : "green"}
-                    />
-                  </td>
-                  <td className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        className="bp-btn bp-btn-secondary"
-                        disabled={busyId === u.id}
-                        onClick={() => void toggleBan(u)}
-                      >
-                        {u.banned ? "Unban" : "Ban"}
-                      </button>
-                      <button
-                        type="button"
-                        className="bp-btn bp-btn-secondary"
-                        disabled={busyId === u.id}
-                        onClick={() => void removeUser(u)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Alert>{actionError ?? error}</Alert>
+      <DataTable columns={columns} rows={items} getKey={(u) => u.id} loading={loading} empty="No users found." />
     </div>
   );
 }
