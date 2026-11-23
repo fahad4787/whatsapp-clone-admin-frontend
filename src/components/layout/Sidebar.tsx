@@ -25,6 +25,7 @@ import {
 import { NAV_GROUPS, type NavItem } from "@/config/nav";
 import { useAdminShell } from "@/components/layout/AdminShell";
 import { AivoraBrand } from "@/components/brand";
+import { clearAdminSession } from "@/lib/api";
 
 const ICONS: Record<
   NavItem["icon"],
@@ -140,15 +141,20 @@ export function Sidebar({ forceExpanded, onNavigate }: SidebarProps) {
             <div className="text-[11px] font-medium text-bp-muted">Superadmin</div>
           </div>
         ) : null}
-        <Link
-          href="/login"
+        <button
+          type="button"
           className="bp-icon-btn"
           title="Log out"
           aria-label="Log out"
-          onClick={onNavigate}
+          onClick={() => {
+            onNavigate?.();
+            clearAdminSession();
+            // Full navigation drops all in-memory state (polling, cached rows).
+            window.location.replace("/login");
+          }}
         >
           <LogOut size={16} />
-        </Link>
+        </button>
       </div>
     </aside>
   );
