@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -25,7 +26,7 @@ import {
 import { NAV_GROUPS, type NavItem } from "@/config/nav";
 import { useAdminShell } from "@/components/layout/AdminShell";
 import { AivoraBrand } from "@/components/brand";
-import { clearAdminSession } from "@/lib/api";
+import { clearAdminSession, currentAdminIdentity } from "@/lib/api";
 
 const ICONS: Record<
   NavItem["icon"],
@@ -64,6 +65,12 @@ export function Sidebar({ forceExpanded, onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const { collapsed: shellCollapsed, widthReady } = useAdminShell();
   const collapsed = forceExpanded ? false : shellCollapsed;
+  const [identity, setIdentity] = useState<{ email: string | null; role: string | null }>({
+    email: null,
+    role: null,
+  });
+  useEffect(() => setIdentity(currentAdminIdentity()), []);
+  const identityLabel = identity.email ?? "Admin";
 
   return (
     <aside
@@ -133,12 +140,12 @@ export function Sidebar({ forceExpanded, onNavigate }: SidebarProps) {
         }`}
       >
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-bp-green-soft text-sm font-bold text-bp-green ring-1 ring-bp-green/10">
-          F
+          {identityLabel.charAt(0).toUpperCase()}
         </div>
         {!collapsed ? (
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold">Fixel</div>
-            <div className="text-[11px] font-medium text-bp-muted">Superadmin</div>
+            <div className="truncate text-sm font-semibold" title={identity.email ?? undefined}>{identityLabel}</div>
+            <div className="text-[11px] font-medium capitalize text-bp-muted">{(identity.role ?? "admin").replace(/_/g, " ")}</div>
           </div>
         ) : null}
         <button

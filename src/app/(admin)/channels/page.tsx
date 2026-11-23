@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useAutoRefresh } from "@/hooks/useAutoRefresh";
-import { PageHeader, StatusBadge } from "@/components/ui";
-import { STORAGE_KEYS } from "@/config/constants";
+import { useCallback, useMemo, useState } from "react";
+import { Alert, DataTable, FilterBar, PageHeader, RefreshButton, StatusBadge, type Column } from "@/components/ui";
+import { useAdminList } from "@/hooks/useAdminList";
 import {
   createAdminChannel,
   deleteAdminChannel,
   fetchAdminChannelPosts,
   fetchAdminChannels,
+  getAdminToken,
   hideAdminChannelPost,
   patchAdminChannel,
   type AdminChannelItem,
@@ -16,249 +16,187 @@ import {
 } from "@/lib/api";
 
 export default function ChannelsPage() {
-  const [items, setItems] = useState<AdminChannelItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
+  const [q, setQ] = useState("");
+  const [visibility, setVisibility] = useState("all");
   const [selected, setSelected] = useState<AdminChannelItem | null>(null);
   const [posts, setPosts] = useState<AdminChannelPostItem[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-      if (!token) {
-        setError("Sign in again");
-        return;
-      }
-      const data = await fetchAdminChannels(token);
-      setItems(data.items);
-    } catch {
-      setError("Could not load channels");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const fetcher = useCallback(async (t: string) => (await fetchAdminChannels(t)).items, []);
+  const { items, setItems, loading, error, reload } = useAdminList(fetcher, {
+    interval: 30_000,
+    errorMessage: "Could not load channels — check your connection",
+  });
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  /** Shared busy/error handling for per-channel actions. */
+  const run = useCallback(
+    async (id: string, failMsg: string, action: (token: string) => Promise<void>) => {
+      const token = getAdminToken();
+      if (!token) return;
+      setBusyId(id);
+      setActionError(null);
+      try {
+        await action(token);
+      } catch {
+        setActionError(failMsg);
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [],
+  );
+
+  const patch = useCallback(
+    (c: AdminChannelItem, change: { listed?: boolean; verified?: boolean }) =>
+      run(c.id, "Update failed", async (t) => {
+        const updated = await patchAdminChannel(t, c.id, change);
+        setItems((list) => list.map((row) => (row.id === updated.id ? updated : row)));
+      }),
+    [run, setItems],
+  );
+
+  const remove = useCallback(
+    (c: AdminChannelItem) => {
+      if (!window.confirm(`Delete channel “${c.name}”?`)) return;
+      return run(c.id, "Delete failed", async (t) => {
+        await deleteAdminChannel(t, c.id);
+        setSelected((s) => (s?.id === c.id ? null : s));
+        setItems((list) => list.filter((row) => row.id !== c.id));
+      });
+    },
+    [run, setItems],
+  );
+
+  const openPosts = useCallback(
+    async (c: AdminChannelItem) => {
+      const token = getAdminToken();
+      if (!token) return;
+      setSelected(c);
+      setPostsLoading(true);
+      setPosts([]);
+      try {
+        setPosts((await fetchAdminChannelPosts(token, c.id)).items);
+      } catch {
+        setActionError("Could not load posts");
+      } finally {
+        setPostsLoading(false);
+      }
+    },
+    [],
+  );
 
   async function create() {
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-    if (!token || !newName.trim()) return;
-    setBusyId("create");
-    try {
-      await createAdminChannel(token, { name: newName.trim(), listed: true });
+    if (!newName.trim()) return;
+    await run("create", "Create failed", async (t) => {
+      await createAdminChannel(t, { name: newName.trim(), listed: true });
       setNewName("");
-      await load();
-    } catch {
-      setError("Create failed");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function toggleListed(c: AdminChannelItem) {
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-    if (!token) return;
-    setBusyId(c.id);
-    try {
-      const updated = await patchAdminChannel(token, c.id, { listed: !c.listed });
-      setItems((list) => list.map((row) => (row.id === updated.id ? updated : row)));
-    } catch {
-      setError("Update failed");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function toggleVerified(c: AdminChannelItem) {
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-    if (!token) return;
-    setBusyId(c.id);
-    try {
-      const updated = await patchAdminChannel(token, c.id, { verified: !c.verified });
-      setItems((list) => list.map((row) => (row.id === updated.id ? updated : row)));
-    } catch {
-      setError("Update failed");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function remove(c: AdminChannelItem) {
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-    if (!token) return;
-    if (!window.confirm(`Delete channel “${c.name}”?`)) return;
-    setBusyId(c.id);
-    try {
-      await deleteAdminChannel(token, c.id);
-      if (selected?.id === c.id) {
-        setSelected(null);
-        setPosts([]);
-      }
-      await load();
-    } catch {
-      setError("Delete failed");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function openPosts(c: AdminChannelItem) {
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-    if (!token) return;
-    setSelected(c);
-    setPostsLoading(true);
-    try {
-      const data = await fetchAdminChannelPosts(token, c.id);
-      setPosts(data.items);
-    } catch {
-      setError("Could not load posts");
-      setPosts([]);
-    } finally {
-      setPostsLoading(false);
-    }
+      await reload();
+    });
   }
 
   async function hidePost(postId: string) {
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
+    const token = getAdminToken();
     if (!token || !selected) return;
     try {
       await hideAdminChannelPost(token, selected.id, postId);
-      setPosts((list) =>
-        list.map((p) => (p.id === postId ? { ...p, deleted: true } : p)),
-      );
+      setPosts((list) => list.map((p) => (p.id === postId ? { ...p, deleted: true } : p)));
     } catch {
-      setError("Hide post failed");
+      setActionError("Hide post failed");
     }
   }
 
-  useAutoRefresh(load, 30000);
+  const rows = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return items.filter(
+      (c) =>
+        (visibility === "all" || (visibility === "listed") === c.listed) &&
+        (!needle || `${c.name} ${c.slug}`.toLowerCase().includes(needle)),
+    );
+  }, [items, q, visibility]);
+
+  const columns = useMemo<Column<AdminChannelItem>[]>(
+    () => [
+      { key: "name", header: "Channel", className: "font-semibold", cell: (c) => c.name },
+      { key: "slug", header: "Slug", className: "font-mono text-bp-muted", cell: (c) => c.slug },
+      { key: "followers", header: "Followers", cell: (c) => c.followers },
+      { key: "posts", header: "Posts", cell: (c) => c.posts },
+      {
+        key: "flags",
+        header: "Flags",
+        cell: (c) => (
+          <div className="flex flex-wrap gap-1">
+            <StatusBadge label={c.listed ? "Listed" : "Hidden"} tone={c.listed ? "green" : "gray"} />
+            {c.verified ? <StatusBadge label="Verified" tone="green" /> : null}
+          </div>
+        ),
+      },
+      {
+        key: "actions",
+        header: "",
+        align: "right",
+        cell: (c) => (
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" className="bp-btn bp-btn-secondary" disabled={busyId === c.id} onClick={() => void openPosts(c)}>
+              Posts
+            </button>
+            <button type="button" className="bp-btn bp-btn-secondary" disabled={busyId === c.id} onClick={() => void patch(c, { listed: !c.listed })}>
+              {c.listed ? "Unlist" : "List"}
+            </button>
+            <button type="button" className="bp-btn bp-btn-secondary" disabled={busyId === c.id} onClick={() => void patch(c, { verified: !c.verified })}>
+              {c.verified ? "Unverify" : "Verify"}
+            </button>
+            <button type="button" className="bp-btn bp-btn-secondary" disabled={busyId === c.id} onClick={() => void remove(c)}>
+              Delete
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [busyId, openPosts, patch, remove],
+  );
 
   return (
     <div className="bp-page">
       <PageHeader
         title="Channels"
         description="Moderate broadcast channels — unlist, verify, hide posts, or delete."
-        actions={
-          <button type="button" className="bp-btn bp-btn-secondary" onClick={() => void load()}>
-            Refresh
-          </button>
-        }
+        actions={<RefreshButton onClick={() => void reload()} />}
       />
-      {error ? (
-        <div className="mb-4 rounded-[var(--radius-sm)] border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
 
       <div className="bp-card mb-4 flex flex-wrap items-end gap-3 p-4">
         <label className="grow text-sm font-semibold">
           New channel
-          <input
-            className="bp-input mt-1.5"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Name"
-          />
+          <input className="bp-input mt-1.5" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name" />
         </label>
-        <button
-          type="button"
-          className="bp-btn"
-          disabled={busyId === "create" || !newName.trim()}
-          onClick={() => void create()}
-        >
+        <button type="button" className="bp-btn" disabled={busyId === "create" || !newName.trim()} onClick={() => void create()}>
           Create
         </button>
       </div>
 
-      <div className="bp-card overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-bp-line bg-bp-soft/40 text-xs uppercase tracking-wide text-bp-muted">
-            <tr>
-              <th className="px-4 py-3 font-semibold">Channel</th>
-              <th className="px-4 py-3 font-semibold">Slug</th>
-              <th className="px-4 py-3 font-semibold">Followers</th>
-              <th className="px-4 py-3 font-semibold">Posts</th>
-              <th className="px-4 py-3 font-semibold">Flags</th>
-              <th className="px-4 py-3 font-semibold" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td className="px-4 py-6 text-bp-muted" colSpan={6}>
-                  Loading…
-                </td>
-              </tr>
-            ) : items.length === 0 ? (
-              <tr>
-                <td className="px-4 py-6 text-bp-muted" colSpan={6}>
-                  No channels
-                </td>
-              </tr>
-            ) : (
-              items.map((c) => (
-                <tr key={c.id} className="border-b border-bp-line/70 last:border-0">
-                  <td className="px-4 py-3 font-semibold">{c.name}</td>
-                  <td className="px-4 py-3 font-mono text-bp-muted">{c.slug}</td>
-                  <td className="px-4 py-3">{c.followers}</td>
-                  <td className="px-4 py-3">{c.posts}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      <StatusBadge
-                        label={c.listed ? "Listed" : "Hidden"}
-                        tone={c.listed ? "green" : "gray"}
-                      />
-                      {c.verified ? <StatusBadge label="Verified" tone="green" /> : null}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <button
-                        type="button"
-                        className="bp-btn bp-btn-secondary"
-                        disabled={busyId === c.id}
-                        onClick={() => void openPosts(c)}
-                      >
-                        Posts
-                      </button>
-                      <button
-                        type="button"
-                        className="bp-btn bp-btn-secondary"
-                        disabled={busyId === c.id}
-                        onClick={() => void toggleListed(c)}
-                      >
-                        {c.listed ? "Unlist" : "List"}
-                      </button>
-                      <button
-                        type="button"
-                        className="bp-btn bp-btn-secondary"
-                        disabled={busyId === c.id}
-                        onClick={() => void toggleVerified(c)}
-                      >
-                        {c.verified ? "Unverify" : "Verify"}
-                      </button>
-                      <button
-                        type="button"
-                        className="bp-btn bp-btn-secondary"
-                        disabled={busyId === c.id}
-                        onClick={() => void remove(c)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <FilterBar
+        search={{ value: q, onChange: setQ, onSubmit: () => {}, placeholder: "Search channel name or slug" }}
+        segments={{
+          value: visibility,
+          onChange: setVisibility,
+          options: [
+            { value: "all", label: "All" },
+            { value: "listed", label: "Listed" },
+            { value: "hidden", label: "Hidden" },
+          ],
+        }}
+      />
+      <Alert>{actionError ?? error}</Alert>
+      <DataTable
+        columns={columns}
+        rows={rows}
+        getKey={(c) => c.id}
+        loading={loading}
+        empty="No channels found."
+        selectedKey={selected?.id ?? null}
+      />
 
       {selected ? (
         <div className="bp-card mt-4 overflow-hidden">
@@ -291,11 +229,7 @@ export default function ChannelsPage() {
                     </p>
                   </div>
                   {!p.deleted ? (
-                    <button
-                      type="button"
-                      className="bp-btn bp-btn-secondary shrink-0"
-                      onClick={() => void hidePost(p.id)}
-                    >
+                    <button type="button" className="bp-btn bp-btn-secondary shrink-0" onClick={() => void hidePost(p.id)}>
                       Hide
                     </button>
                   ) : null}

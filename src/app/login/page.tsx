@@ -37,6 +37,11 @@ export default function LoginPage() {
   function finish(result: AdminLoginResult) {
     if (result.status === "ok") {
       saveAdminToken(result.access);
+      try {
+        if (email.trim()) localStorage.setItem(STORAGE_KEYS.adminEmail, email.trim());
+      } catch {
+        /* ignore */
+      }
       router.replace(nextPath());
       return;
     }

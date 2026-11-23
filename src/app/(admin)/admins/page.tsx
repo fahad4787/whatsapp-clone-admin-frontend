@@ -1,141 +1,82 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Button, PageHeader, TextInput } from "@/components/ui";
-import { useAutoRefresh } from "@/hooks/useAutoRefresh";
-import { STORAGE_KEYS } from "@/config/constants";
-import {
-  createAdminAdmin,
-  fetchAdminAdmins,
-  type AdminAdminItem,
-} from "@/lib/api";
+import { useCallback, useMemo, useState } from "react";
+import { Alert, Button, DataTable, FilterBar, PageHeader, RefreshButton, StatusBadge, TextInput, type Column } from "@/components/ui";
+import { useAdminList } from "@/hooks/useAdminList";
+import { createAdminAdmin, fetchAdminAdmins, getAdminToken, type AdminAdminItem } from "@/lib/api";
 
 export default function AdminsPage() {
-  const [items, setItems] = useState<AdminAdminItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [q, setQ] = useState("");
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-      if (!token) {
-        setError("Sign in again");
-        return;
-      }
-      const data = await fetchAdminAdmins(token);
-      setItems(data.items);
-    } catch {
-      setError("Could not load admins");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const fetcher = useCallback(async (t: string) => (await fetchAdminAdmins(t)).items, []);
+  const { items, loading, error, reload } = useAdminList(fetcher, {
+    interval: 30_000,
+    errorMessage: "Could not load admins — check your connection",
+  });
 
   async function invite() {
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
+    const token = getAdminToken();
     if (!token) return;
     setBusy(true);
-    setError(null);
+    setActionError(null);
     try {
-      await createAdminAdmin(token, {
-        email: email.trim(),
-        password,
-        display_name: name.trim() || undefined,
-        role: "MOD",
-      });
+      await createAdminAdmin(token, { email: email.trim(), password, display_name: name.trim() || undefined, role: "MOD" });
       setEmail("");
       setPassword("");
       setName("");
-      await load();
+      await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Invite failed (SUPER only)");
+      setActionError(e instanceof Error ? e.message : "Invite failed (SUPER only)");
     } finally {
       setBusy(false);
     }
   }
 
-  useAutoRefresh(load, 30000);
+  const rows = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return items;
+    return items.filter((a) => `${a.display_name ?? ""} ${a.email} ${a.role}`.toLowerCase().includes(needle));
+  }, [items, q]);
+
+  const columns = useMemo<Column<AdminAdminItem>[]>(
+    () => [
+      { key: "name", header: "Name", className: "font-semibold", cell: (a) => a.display_name || "—" },
+      { key: "email", header: "Email", cell: (a) => a.email },
+      { key: "role", header: "Role", cell: (a) => <StatusBadge label={a.role} tone={a.role === "SUPER" ? "green" : "gray"} /> },
+    ],
+    [],
+  );
 
   return (
     <div className="bp-page">
       <PageHeader
         title="Admins"
         description="Console operators. Inviting requires SUPER role."
-        actions={
-          <button type="button" className="bp-btn bp-btn-secondary" onClick={() => void load()}>
-            Refresh
-          </button>
-        }
+        actions={<RefreshButton onClick={() => void reload()} />}
       />
-      {error ? (
-        <div className="mb-4 rounded-[var(--radius-sm)] border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
 
       <div className="bp-card mb-5 p-5">
         <div className="mb-3 text-sm font-bold">Invite admin</div>
         <div className="grid gap-3 sm:grid-cols-3">
           <TextInput placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <TextInput
-            placeholder="Display name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <TextInput
-            type="password"
-            placeholder="Temp password (8+)"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <TextInput placeholder="Display name" value={name} onChange={(e) => setName(e.target.value)} />
+          <TextInput type="password" placeholder="Temp password (8+)" value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         <div className="mt-3">
-          <Button
-            disabled={busy || !email.trim() || password.length < 8}
-            onClick={() => void invite()}
-          >
+          <Button disabled={busy || !email.trim() || password.length < 8} onClick={() => void invite()}>
             {busy ? "Creating…" : "Create"}
           </Button>
         </div>
       </div>
 
-      <div className="bp-card overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-bp-line bg-bp-soft/40 text-xs uppercase tracking-wide text-bp-muted">
-            <tr>
-              <th className="px-4 py-3 font-semibold">Name</th>
-              <th className="px-4 py-3 font-semibold">Email</th>
-              <th className="px-4 py-3 font-semibold">Role</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td className="px-4 py-6 text-bp-muted" colSpan={3}>
-                  Loading…
-                </td>
-              </tr>
-            ) : (
-              items.map((a) => (
-                <tr key={a.id} className="border-b border-bp-line/70 last:border-0">
-                  <td className="px-4 py-3 font-semibold">{a.display_name || "—"}</td>
-                  <td className="px-4 py-3">{a.email}</td>
-                  <td className="px-4 py-3">{a.role}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <FilterBar search={{ value: q, onChange: setQ, onSubmit: () => {}, placeholder: "Search name, email, or role" }} />
+      <Alert>{actionError ?? error}</Alert>
+      <DataTable columns={columns} rows={rows} getKey={(a) => a.id} loading={loading} empty="No admins found." />
     </div>
   );
 }

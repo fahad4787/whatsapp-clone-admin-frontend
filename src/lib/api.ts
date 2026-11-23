@@ -8,11 +8,17 @@ export type BackendHealth = {
   ts: string;
 };
 
+export type AdminOtpStatus = "Pending" | "Used" | "Expired" | "Failed" | "Superseded";
+
 export type AdminOtpItem = {
   id: string;
+  /** Phone number (E.164) or email address, depending on `channel`. */
   phone: string;
+  channel: "phone" | "email";
+  purpose: string;
+  /** Only present while the code is still usable (status Pending). */
   code: string | null;
-  status: string;
+  status: AdminOtpStatus;
   attempts: number;
   expires_at: string;
   created_at: string;
@@ -114,6 +120,22 @@ export function saveAdminToken(token: string) {
     localStorage.setItem(STORAGE_KEYS.adminToken, token);
   } catch {
     /* ignore */
+  }
+}
+
+/** Who is signed in, for display only (the token is verified by the server, not here). */
+export function currentAdminIdentity(): { email: string | null; role: string | null } {
+  try {
+    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
+    const email = localStorage.getItem(STORAGE_KEYS.adminEmail);
+    let role: string | null = null;
+    if (token) {
+      const b = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+      role = (JSON.parse(atob(b)) as { role?: string }).role ?? null;
+    }
+    return { email, role };
+  } catch {
+    return { email: null, role: null };
   }
 }
 
@@ -421,6 +443,7 @@ export function clearAdminSession() {
   try {
     localStorage.removeItem(STORAGE_KEYS.adminToken);
     localStorage.removeItem(STORAGE_KEYS.adminSession);
+    localStorage.removeItem(STORAGE_KEYS.adminEmail);
   } catch {
     /* ignore */
   }

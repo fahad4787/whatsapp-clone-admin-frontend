@@ -11,6 +11,7 @@ export const APP = {
 export const STORAGE_KEYS = {
   adminSession: "av-admin-session",
   adminToken: "av-admin-token",
+  adminEmail: "av-admin-email",
   sidebarCollapsed: "av-admin-sidebar-collapsed",
   mockStore: "av-admin-mock-store",
 } as const;
