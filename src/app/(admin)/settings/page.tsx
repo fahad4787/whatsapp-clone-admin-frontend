@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { KeyRound, MessageSquareText, ShieldAlert } from "lucide-react";
-import { Callout, Card, CardBody, CardHeader, NumberField, PageHeader, SaveBar, Skeleton, SwitchRow } from "@/components/ui";
+import { Callout, ErrorCallout, Card, CardBody, CardHeader, NumberField, PageHeader, SaveBar, Skeleton, SwitchRow } from "@/components/ui";
 import { useAction } from "@/hooks/useAction";
 import { useDraft } from "@/hooks/useDraft";
 import { useQuery } from "@/hooks/useQuery";
@@ -69,7 +69,7 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader title="Settings" description="Changes apply right away, with no app update needed." />
-      {q.error ? <Callout tone="danger" className="mb-4">{q.error}</Callout> : null}
+      {q.error ? <ErrorCallout error={q.error} onRetry={q.reload} retrying={q.fetching} className="mb-4" /> : null}
 
       {!draft ? (
         <div className="grid gap-6 lg:grid-cols-2">

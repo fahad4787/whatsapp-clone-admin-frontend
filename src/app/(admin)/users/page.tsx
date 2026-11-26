@@ -7,7 +7,7 @@ import {
   Badge,
   Button,
   ButtonLink,
-  Callout,
+  ErrorCallout,
   Card,
   CardToolbar,
   DataTable,
@@ -215,7 +215,14 @@ function UsersView() {
   const pathname = usePathname();
   const params = useSearchParams();
   const filter: Filter = params.get("banned") === "1" ? "banned" : "all";
-  const [q, setQ] = useState(params.get("q") ?? "");
+  const urlQ = params.get("q") ?? "";
+  const [q, setQ] = useState(urlQ);
+  // Follow ?q= when it changes underneath us (e.g. a search from the command palette).
+  const [seenUrlQ, setSeenUrlQ] = useState(urlQ);
+  if (urlQ !== seenUrlQ) {
+    setSeenUrlQ(urlQ);
+    setQ(urlQ);
+  }
   const query = useDebouncedValue(q.trim(), 300);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [banTarget, setBanTarget] = useState<UserItem | null>(null);
@@ -239,12 +246,12 @@ function UsersView() {
   };
 
   const columns: Column<UserItem>[] = [
-    { key: "user", header: "User", cell: (u) => <Person name={u.display_name} sub={u.phone} seed={u.id} /> },
+    { key: "user", header: "User", sortValue: (u) => u.display_name, cell: (u) => <Person name={u.display_name} sub={u.phone} seed={u.id} /> },
     { key: "status", header: "Status", cell: (u) => <StatusBadge u={u} /> },
-    { key: "devices", header: "Devices", align: "right", hideBelow: "md", className: "tabular-nums", cell: (u) => fmtNumber(u.device_count) },
-    { key: "chats", header: "Chats", align: "right", hideBelow: "md", className: "tabular-nums", cell: (u) => fmtNumber(u.conversation_count) },
-    { key: "seen", header: "Last seen", hideBelow: "lg", className: "whitespace-nowrap text-muted", cell: (u) => (u.last_seen_at ? timeAgo(u.last_seen_at) : "Never") },
-    { key: "joined", header: "Joined", hideBelow: "sm", className: "whitespace-nowrap text-muted", cell: (u) => fmtDate(u.created_at) },
+    { key: "devices", header: "Devices", sortValue: (u) => u.device_count, align: "right", hideBelow: "md", className: "tabular-nums", cell: (u) => fmtNumber(u.device_count) },
+    { key: "chats", header: "Chats", sortValue: (u) => u.conversation_count, align: "right", hideBelow: "md", className: "tabular-nums", cell: (u) => fmtNumber(u.conversation_count) },
+    { key: "seen", header: "Last seen", sortValue: (u) => (u.last_seen_at ? Date.parse(u.last_seen_at) : null), hideBelow: "lg", className: "whitespace-nowrap text-muted", cell: (u) => (u.last_seen_at ? timeAgo(u.last_seen_at) : "Never") },
+    { key: "joined", header: "Joined", sortValue: (u) => Date.parse(u.created_at), hideBelow: "sm", className: "whitespace-nowrap text-muted", cell: (u) => fmtDate(u.created_at) },
   ];
 
   const exportCsv = () =>
@@ -267,7 +274,7 @@ function UsersView() {
         }
       />
 
-      {list.error ? <Callout tone="danger" className="mb-4" action={<Button size="sm" variant="secondary" onClick={() => void list.reload()}>Retry</Button>}>{list.error}</Callout> : null}
+      {list.error ? <ErrorCallout error={list.error} onRetry={list.reload} retrying={list.fetching} className="mb-4" /> : null}
 
       <Card>
         <CardToolbar>

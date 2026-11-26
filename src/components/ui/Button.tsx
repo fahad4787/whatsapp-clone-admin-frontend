@@ -9,9 +9,9 @@ export type ButtonSize = "sm" | "md";
 const VARIANTS: Record<ButtonVariant, string> = {
   primary: "bg-brand text-white shadow-xs hover:bg-brand-strong active:bg-brand-strong",
   secondary: "border border-line bg-surface text-ink shadow-xs hover:border-line-strong hover:bg-surface-muted",
-  ghost: "text-ink-soft hover:bg-brand-soft hover:text-brand-strong",
-  danger: "bg-danger text-white shadow-xs hover:bg-danger-strong",
-  "danger-soft": "border border-transparent bg-danger-soft text-danger hover:border-danger/20",
+  ghost: "text-ink-soft hover:bg-brand-soft hover:text-brand-text",
+  danger: "bg-danger-solid text-white shadow-xs hover:bg-danger-solid-hover",
+  "danger-soft": "border border-transparent bg-danger-soft text-danger-text hover:border-danger/20",
 };
 
 const SIZES: Record<ButtonSize, string> = {
@@ -21,7 +21,7 @@ const SIZES: Record<ButtonSize, string> = {
 
 export function buttonClass(variant: ButtonVariant = "primary", size: ButtonSize = "md", className?: string) {
   return cn(
-    "inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap font-semibold transition-colors duration-150",
+    "inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap font-semibold transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-out active:scale-[0.98]",
     "disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0",
     VARIANTS[variant],
     SIZES[size],
@@ -68,7 +68,7 @@ export function IconButton({ label, tone = "default", size = "md", className, ty
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-lg text-muted transition-colors duration-150 disabled:pointer-events-none disabled:opacity-40",
         size === "sm" ? "h-7 w-7" : "h-9 w-9",
-        tone === "danger" ? "hover:bg-danger-soft hover:text-danger" : "hover:bg-brand-soft hover:text-brand-strong",
+        tone === "danger" ? "hover:bg-danger-soft hover:text-danger-text" : "hover:bg-brand-soft hover:text-brand-text",
         className,
       )}
       {...rest}

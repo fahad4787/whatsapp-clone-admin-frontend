@@ -179,7 +179,7 @@ function LoginForm() {
                   <code className="min-w-0 flex-1 break-all font-mono text-sm font-semibold text-ink">{step.setup.secret}</code>
                   <CopyButton value={step.setup.secret} label="Copy setup key" />
                 </div>
-                <a href={step.setup.otpauth_uri} className="mt-2 inline-block text-[13px] font-semibold text-brand hover:text-brand-strong">
+                <a href={step.setup.otpauth_uri} className="mt-2 inline-block text-[13px] font-semibold text-brand hover:text-brand-text">
                   Open in authenticator app
                 </a>
               </>

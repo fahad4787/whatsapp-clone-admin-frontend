@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Download, Phone } from "lucide-react";
 import { CallPeople, CallStatusBadge, CallType } from "@/components/calls/CallCells";
-import { Button, Callout, Card, CardToolbar, DataTable, EmptyState, PageHeader, SearchInput, Select, type Column } from "@/components/ui";
+import { Button, ErrorCallout, Card, CardToolbar, DataTable, EmptyState, PageHeader, SearchInput, Select, type Column } from "@/components/ui";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useQuery } from "@/hooks/useQuery";
 import { adminApi, type CallItem, type CallStatus } from "@/lib/api";
@@ -45,8 +45,8 @@ export default function CallsPage() {
     { key: "who", header: "Caller", cell: (c) => <CallPeople c={c} /> },
     { key: "type", header: "Type", hideBelow: "sm", cell: (c) => <CallType c={c} /> },
     { key: "status", header: "Result", cell: (c) => <CallStatusBadge c={c} /> },
-    { key: "started", header: "When", hideBelow: "md", className: "whitespace-nowrap text-muted", cell: (c) => fmtDateTime(c.started_at) },
-    { key: "duration", header: "Duration", align: "right", className: "tabular-nums", cell: (c) => fmtDuration(c.duration_seconds) },
+    { key: "started", header: "When", sortValue: (c) => Date.parse(c.started_at), hideBelow: "md", className: "whitespace-nowrap text-muted", cell: (c) => fmtDateTime(c.started_at) },
+    { key: "duration", header: "Duration", sortValue: (c) => c.duration_seconds, align: "right", className: "tabular-nums", cell: (c) => fmtDuration(c.duration_seconds) },
   ];
 
   const exportCsv = () =>
@@ -77,7 +77,7 @@ export default function CallsPage() {
         description="The latest 200 calls that match. Search by phone number or name."
         actions={<Button variant="secondary" icon={<Download size={16} />} onClick={exportCsv} disabled={!items.length}>Export CSV</Button>}
       />
-      {list.error ? <Callout tone="danger" className="mb-4">{list.error}</Callout> : null}
+      {list.error ? <ErrorCallout error={list.error} onRetry={list.reload} retrying={list.fetching} className="mb-4" /> : null}
       <Card>
         <CardToolbar>
           <SearchInput value={q} onChange={setQ} placeholder="Phone or name" className="md:max-w-xs" aria-label="Search calls" />

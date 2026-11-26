@@ -1,7 +1,7 @@
 "use client";
 
 import { Smile, Star } from "lucide-react";
-import { Badge, Callout, Card, EmptyState, PageHeader, Skeleton } from "@/components/ui";
+import { Badge, Callout, ErrorCallout, Card, EmptyState, PageHeader, Skeleton } from "@/components/ui";
 import { useQuery } from "@/hooks/useQuery";
 import { adminApi } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
@@ -18,7 +18,7 @@ export default function StickersPage() {
         count={q.data ? items.length : undefined}
         description={q.data ? `${fmtNumber(total)} stickers available to everyone in the app.` : "Sticker packs available in the app."}
       />
-      {q.error ? <Callout tone="danger" className="mb-4">{q.error}</Callout> : null}
+      {q.error ? <ErrorCallout error={q.error} onRetry={q.reload} retrying={q.fetching} className="mb-4" /> : null}
       <Callout tone="info" className="mb-6">
         These packs are built into the app, so they&apos;re read-only here. Uploading new packs isn&apos;t available yet.
       </Callout>
@@ -31,7 +31,7 @@ export default function StickersPage() {
           {items.map((p) => (
             <li key={p.id}>
               <Card className="flex h-full items-start gap-4 p-5">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-brand">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
                   <Smile size={22} />
                 </span>
                 <div className="min-w-0 flex-1">

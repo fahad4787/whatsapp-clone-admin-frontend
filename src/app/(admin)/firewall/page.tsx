@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { Globe, MapPin, Plus, ShieldCheck, X } from "lucide-react";
-import { Badge, Button, Callout, Card, CardBody, CardHeader, EmptyState, Input, PageHeader, SaveBar, Skeleton, useConfirm } from "@/components/ui";
+import { Badge, Button, Callout, ErrorCallout, Card, CardBody, CardHeader, EmptyState, Input, PageHeader, SaveBar, Skeleton, useConfirm } from "@/components/ui";
 import { useAction } from "@/hooks/useAction";
 import { useDraft } from "@/hooks/useDraft";
 import { useQuery } from "@/hooks/useQuery";
@@ -63,7 +63,7 @@ export default function FirewallPage() {
   return (
     <>
       <PageHeader title="IP allowlist" description="Limit where admins can sign in from. Doesn't affect app users." />
-      {q.error ? <Callout tone="danger" className="mb-4">{q.error}</Callout> : null}
+      {q.error ? <ErrorCallout error={q.error} onRetry={q.reload} retrying={q.fetching} className="mb-4" /> : null}
 
       {!draft ? (
         <Skeleton className="h-80" />
@@ -102,7 +102,7 @@ export default function FirewallPage() {
                     return (
                       <li key={value} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface-muted py-1 pl-3 pr-1 font-mono text-[13px] text-ink">
                         {value}
-                        {mine ? <span className="font-sans text-[11px] font-semibold text-brand">you</span> : null}
+                        {mine ? <span className="font-sans text-[11px] font-semibold text-brand-text">you</span> : null}
                         <button
                           type="button"
                           onClick={() => remove(value)}

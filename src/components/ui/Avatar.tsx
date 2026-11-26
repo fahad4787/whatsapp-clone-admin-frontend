@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { initials } from "@/lib/format";
 
-const PALETTE = ["bg-brand-soft text-brand-strong", "bg-info-soft text-info", "bg-warning-soft text-warning", "bg-[#f3eefe] text-[#6d28d9]", "bg-[#fdf0f7] text-[#be185d]"];
+// Existing palette tones only (brand, info, warning, danger, neutral) so avatars never introduce new hues.
+const PALETTE = ["bg-brand-soft text-brand-text", "bg-info-soft text-info", "bg-warning-soft text-warning", "bg-danger-soft text-danger-text", "bg-surface-muted text-ink-soft ring-1 ring-inset ring-line"];
 
 function hash(s: string) {
   let h = 0;

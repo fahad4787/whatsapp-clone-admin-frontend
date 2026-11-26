@@ -16,6 +16,7 @@ import type {
   LegalDocs,
   LoginResult,
   Metrics,
+  MetricsSeries,
   OtpItem,
   ReportItem,
   ReportStatus,
@@ -69,6 +70,8 @@ export async function fetchHealth(signal?: AbortSignal): Promise<BackendHealth |
 
 export const adminApi = {
   metrics: (signal?: Sig) => request<Metrics>("/api/admin/metrics", { signal }),
+  /** Daily counts for the trend charts. Older backends return 404; callers treat that as "no trend data". */
+  metricsSeries: (days: number, signal?: Sig) => request<MetricsSeries>("/api/admin/metrics/series", { query: { days }, signal }),
 
   otps: {
     list: (signal?: Sig) => request<Items<OtpItem>>("/api/admin/otps", { query: { limit: 100 }, signal }),

@@ -5,7 +5,7 @@ import { Globe2, Pencil } from "lucide-react";
 import {
   Badge,
   Button,
-  Callout,
+  ErrorCallout,
   Card,
   CardToolbar,
   DataTable,
@@ -148,6 +148,7 @@ export default function CountriesPage() {
     {
       key: "country",
       header: "Country",
+      sortValue: (c) => c.name,
       cell: (c) => (
         <span className="flex items-center gap-3">
           <span className="text-xl leading-none" aria-hidden>{flag(c.iso)}</span>
@@ -158,8 +159,8 @@ export default function CountriesPage() {
         </span>
       ),
     },
-    { key: "dial", header: "Dial code", className: "tabular-nums font-medium", cell: (c) => (c.dial.startsWith("+") ? c.dial : `+${c.dial}`) },
-    { key: "sort", header: "Order", align: "right", hideBelow: "sm", className: "tabular-nums text-muted", cell: (c) => c.sort_order },
+    { key: "dial", header: "Dial code", sortValue: (c) => Number(c.dial.replace(/\D/g, "")), className: "tabular-nums font-medium", cell: (c) => (c.dial.startsWith("+") ? c.dial : `+${c.dial}`) },
+    { key: "sort", header: "Order", sortValue: (c) => c.sort_order, align: "right", hideBelow: "sm", className: "tabular-nums text-muted", cell: (c) => c.sort_order },
     { key: "state", header: "Status", hideBelow: "md", cell: (c) => (c.enabled ? <Badge tone="success">Shown</Badge> : <Badge tone="neutral">Hidden</Badge>) },
     {
       key: "actions",
@@ -183,7 +184,7 @@ export default function CountriesPage() {
         count={list.data ? all.length : undefined}
         description={list.data ? `${fmtNumber(enabledCount)} shown in the app's sign-in country picker.` : "Countries offered in the app's sign-in picker."}
       />
-      {list.error ? <Callout tone="danger" className="mb-4">{list.error}</Callout> : null}
+      {list.error ? <ErrorCallout error={list.error} onRetry={list.reload} retrying={list.fetching} className="mb-4" /> : null}
       <Card>
         <CardToolbar>
           <SearchInput value={q} onChange={setQ} placeholder="Name, ISO or dial code" className="md:max-w-xs" aria-label="Search countries" />

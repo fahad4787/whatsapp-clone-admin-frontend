@@ -59,3 +59,16 @@ export function initials(name: string | null | undefined, fallback = "?"): strin
   if (/^\d+$/.test(words.join(""))) return words.join("").slice(-2);
   return words.slice(0, 2).map((w) => w[0].toUpperCase()).join("");
 }
+
+export function fmtBytes(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "";
+  if (n < 1024) return `${n} B`;
+  const units = ["KB", "MB", "GB"];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+}

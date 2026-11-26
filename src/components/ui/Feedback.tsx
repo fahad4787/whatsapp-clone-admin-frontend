@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, RotateCw, XCircle } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { Button } from "./Button";
 
 const CALLOUT = {
   info: { cls: "border-info/15 bg-info-soft text-ink-soft", icon: Info, iconCls: "text-info" },
@@ -25,13 +26,30 @@ export function Callout({ tone = "info", title, children, action, className }: C
   );
 }
 
+/** A failed load: the message plus a Retry that re-runs the same request. */
+export function ErrorCallout({ error, onRetry, retrying, className }: { error: string; onRetry: () => void; retrying?: boolean; className?: string }) {
+  return (
+    <Callout
+      tone="danger"
+      className={className}
+      action={
+        <Button size="sm" variant="secondary" icon={<RotateCw size={14} />} loading={retrying} onClick={onRetry}>
+          Retry
+        </Button>
+      }
+    >
+      {error}
+    </Callout>
+  );
+}
+
 type EmptyStateProps = { icon?: ReactNode; title: string; description?: ReactNode; action?: ReactNode; className?: string };
 
 export function EmptyState({ icon, title, description, action, className }: EmptyStateProps) {
   return (
     <div className={cn("flex flex-col items-center justify-center px-6 py-14 text-center", className)}>
-      {icon ? <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft text-brand">{icon}</div> : null}
-      <div className="text-[15px] font-bold text-ink">{title}</div>
+      {icon ? <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-surface-muted text-muted">{icon}</div> : null}
+      <div className="text-[15px] font-semibold text-ink">{title}</div>
       {description ? <p className="mt-1 max-w-sm text-[13px] text-muted">{description}</p> : null}
       {action ? <div className="mt-4">{action}</div> : null}
     </div>

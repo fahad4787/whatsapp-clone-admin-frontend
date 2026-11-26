@@ -26,7 +26,7 @@ export function Switch({ checked, onChange, disabled, label, size = "md" }: Swit
     >
       <span
         className={cn(
-          "inline-block rounded-full bg-white shadow-sm transition-transform duration-200",
+          "inline-block rounded-full bg-knob shadow-sm transition-transform duration-200 ease-out",
           size === "sm" ? "h-4 w-4" : "h-5 w-5",
           checked ? (size === "sm" ? "translate-x-[18px]" : "translate-x-[22px]") : "translate-x-0.5",
         )}

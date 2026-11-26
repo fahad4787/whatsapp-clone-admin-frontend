@@ -57,7 +57,7 @@ export function Select<V extends string>({ value, onChange, options, className, 
           </option>
         ))}
       </select>
-      <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-subtle" />
+      <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
     </div>
   );
 }
@@ -81,7 +81,7 @@ export function SearchInput({ value, onChange, placeholder = "Search", className
           type="button"
           aria-label="Clear search"
           onClick={() => onChange("")}
-          className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-subtle hover:bg-surface-muted hover:text-ink"
+          className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-ink"
         >
           <X size={14} />
         </button>

@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { ExternalLink, Package, ShieldCheck } from "lucide-react";
-import { Callout, Card, CardBody, CardHeader, Field, Input, NumberField, PageHeader, SaveBar, Skeleton } from "@/components/ui";
+import { Callout, ErrorCallout, Card, CardBody, CardHeader, Field, Input, NumberField, PageHeader, SaveBar, Skeleton } from "@/components/ui";
 import { useAction } from "@/hooks/useAction";
 import { useDraft } from "@/hooks/useDraft";
 import { useQuery } from "@/hooks/useQuery";
@@ -72,7 +72,7 @@ export default function AndroidPage() {
   return (
     <>
       <PageHeader title="Android app" description="Release details the app checks when it opens the sign-in screen." />
-      {q.error ? <Callout tone="danger" className="mb-4">{q.error}</Callout> : null}
+      {q.error ? <ErrorCallout error={q.error} onRetry={q.reload} retrying={q.fetching} className="mb-4" /> : null}
 
       {!draft || !errors ? (
         <div className="grid gap-6 lg:grid-cols-2">
@@ -111,7 +111,7 @@ export default function AndroidPage() {
                     onChange={(e) => set("download_url", e.target.value)}
                     trailing={
                       isHttpUrl(url) ? (
-                        <a href={url} target="_blank" rel="noreferrer" className="flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-brand-soft hover:text-brand-strong" aria-label="Open download link" title="Open link">
+                        <a href={url} target="_blank" rel="noreferrer" className="flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-brand-soft hover:text-brand-text" aria-label="Open download link" title="Open link">
                           <ExternalLink size={15} />
                         </a>
                       ) : undefined

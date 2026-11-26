@@ -6,7 +6,7 @@ import { Clock, Lock, MessagesSquare, Users } from "lucide-react";
 import {
   Avatar,
   Badge,
-  Callout,
+  ErrorCallout,
   Card,
   CardHeader,
   CardToolbar,
@@ -73,7 +73,7 @@ function ConversationDetail({ id }: { id: string }) {
     if (d && (!perspective || !d.members.some((m) => m.user_id === perspective))) setPerspective(d.members[0]?.user_id ?? "");
   }, [d, perspective]);
 
-  if (detail.error && !d) return <Callout tone="danger" className="m-5">{detail.error}</Callout>;
+  if (detail.error && !d) return <ErrorCallout error={detail.error} onRetry={detail.reload} retrying={detail.fetching} className="m-5" />;
   if (!d) {
     return (
       <div className="space-y-3 p-5">
@@ -136,7 +136,14 @@ function ConversationsView() {
   const pathname = usePathname();
   const params = useSearchParams();
   const openId = params.get("id");
-  const [q, setQ] = useState(params.get("q") ?? "");
+  const urlQ = params.get("q") ?? "";
+  const [q, setQ] = useState(urlQ);
+  // Follow ?q= when it changes underneath us (e.g. a search from the command palette).
+  const [seenUrlQ, setSeenUrlQ] = useState(urlQ);
+  if (urlQ !== seenUrlQ) {
+    setSeenUrlQ(urlQ);
+    setQ(urlQ);
+  }
   const [type, setType] = useState<TypeFilter>("all");
   const query = useDebouncedValue(q.trim(), 300);
 
@@ -156,7 +163,7 @@ function ConversationsView() {
   return (
     <>
       <PageHeader title="Conversations" count={list.data ? items.length : undefined} description="Read-only view for moderation. Search by group name, phone number or member name." />
-      {list.error ? <Callout tone="danger" className="mb-4">{list.error}</Callout> : null}
+      {list.error ? <ErrorCallout error={list.error} onRetry={list.reload} retrying={list.fetching} className="mb-4" /> : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
         <Card className="flex max-h-[calc(100vh-12rem)] flex-col overflow-hidden lg:sticky lg:top-[calc(var(--topbar-h)+2rem)]">

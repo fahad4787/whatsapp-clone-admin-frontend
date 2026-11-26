@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -8,8 +8,8 @@ import { IconButton } from "./Button";
 
 const FOCUSABLE = 'input:not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled]),[href],[tabindex]:not([tabindex="-1"])';
 
-/** Esc to close, body scroll lock, focus first field, restore focus on close. */
-function useOverlay(open: boolean, onClose: () => void, panel: React.RefObject<HTMLElement | null>) {
+/** Esc to close, body scroll lock, focus first field, trap Tab, restore focus on close. */
+export function useOverlay(open: boolean, onClose: () => void, panel: React.RefObject<HTMLElement | null>) {
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
@@ -49,6 +49,29 @@ function useOverlay(open: boolean, onClose: () => void, panel: React.RefObject<H
   }, [open, panel]);
 }
 
+/**
+ * Keeps an overlay mounted for `ms` after `open` turns false so it can play its exit animation.
+ * Honours reduced motion by unmounting immediately.
+ */
+export function usePresence(open: boolean, ms = 180) {
+  const [mounted, setMounted] = useState(open);
+  if (open && !mounted) setMounted(true);
+  useEffect(() => {
+    if (open || !mounted) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const t = window.setTimeout(() => setMounted(false), reduce ? 0 : ms);
+    return () => window.clearTimeout(t);
+  }, [open, mounted, ms]);
+  return { mounted, closing: mounted && !open };
+}
+
+/** While closing, keep showing what was on screen when the overlay was last open (its data may be cleared already). */
+function useLastOpen<T>(open: boolean, value: T) {
+  const last = useRef(value);
+  if (open) last.current = value;
+  return last.current;
+}
+
 type ModalProps = {
   open: boolean;
   onClose: () => void;
@@ -66,30 +89,36 @@ const WIDTH = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl" };
 export function Modal({ open, onClose, title, description, children, footer, size = "md", onSubmit }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null);
   useOverlay(open, onClose, panel);
-  if (!open || typeof document === "undefined") return null;
+  const { mounted, closing } = usePresence(open, 160);
+  const view = useLastOpen(open, { title, description, children, footer });
+  if (!mounted || typeof document === "undefined") return null;
 
   const inner = (
     <>
-      {children ? <div className="max-h-[65vh] overflow-y-auto px-6 py-5">{children}</div> : null}
-      {footer ? <div className="flex flex-wrap justify-end gap-2 border-t border-line bg-surface-muted/60 px-6 py-4">{footer}</div> : null}
+      {view.children ? <div className="max-h-[65vh] overflow-y-auto px-6 py-5">{view.children}</div> : null}
+      {view.footer ? <div className="flex flex-wrap justify-end gap-2 border-t border-line bg-surface-muted/60 px-6 py-4">{view.footer}</div> : null}
     </>
   );
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
-      <div className="absolute inset-0 animate-fade-in bg-ink/40 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
+    <div className={cn("fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4", closing && "pointer-events-none")}>
+      <div className={cn("absolute inset-0 bg-scrim backdrop-blur-[2px]", closing ? "animate-fade-out" : "animate-fade-in")} onClick={onClose} aria-hidden />
       <div
         ref={panel}
         role="dialog"
         aria-modal="true"
-        aria-label={typeof title === "string" ? title : undefined}
+        aria-label={typeof view.title === "string" ? view.title : undefined}
         tabIndex={-1}
-        className={cn("relative w-full animate-pop-in rounded-t-2xl bg-surface shadow-pop outline-none sm:rounded-2xl", WIDTH[size])}
+        className={cn(
+          "relative w-full rounded-t-2xl border border-line bg-surface shadow-pop outline-none sm:rounded-xl",
+          closing ? "animate-pop-out" : "animate-pop-in",
+          WIDTH[size],
+        )}
       >
         <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
           <div className="min-w-0">
-            <h2 className="text-base font-bold tracking-tight text-ink">{title}</h2>
-            {description ? <p className="mt-0.5 text-[13px] text-muted">{description}</p> : null}
+            <h2 className="text-base font-semibold tracking-tight text-ink">{view.title}</h2>
+            {view.description ? <p className="mt-0.5 text-[13px] text-muted">{view.description}</p> : null}
           </div>
           <IconButton label="Close" size="sm" onClick={onClose} className="-mr-2">
             <X size={16} />
@@ -100,7 +129,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
             noValidate
             onSubmit={(e) => {
               e.preventDefault();
-              onSubmit();
+              if (!closing) onSubmit();
             }}
           >
             {inner}
@@ -120,32 +149,35 @@ type DrawerProps = { open: boolean; onClose: () => void; title: ReactNode; descr
 export function Drawer({ open, onClose, title, description, children, footer, width = "md" }: DrawerProps) {
   const panel = useRef<HTMLDivElement>(null);
   useOverlay(open, onClose, panel);
-  if (!open || typeof document === "undefined") return null;
+  const { mounted, closing } = usePresence(open, 200);
+  const view = useLastOpen(open, { title, description, children, footer });
+  if (!mounted || typeof document === "undefined") return null;
   return createPortal(
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 animate-fade-in bg-ink/30" onClick={onClose} aria-hidden />
+    <div className={cn("fixed inset-0 z-50", closing && "pointer-events-none")}>
+      <div className={cn("absolute inset-0 bg-scrim", closing ? "animate-fade-out" : "animate-fade-in")} onClick={onClose} aria-hidden />
       <aside
         ref={panel}
         role="dialog"
         aria-modal="true"
-        aria-label={typeof title === "string" ? title : undefined}
+        aria-label={typeof view.title === "string" ? view.title : undefined}
         tabIndex={-1}
         className={cn(
-          "absolute inset-y-0 right-0 flex w-full animate-slide-in flex-col bg-surface shadow-pop outline-none",
+          "absolute inset-y-0 right-0 flex w-full flex-col border-l border-line bg-surface shadow-pop outline-none",
+          closing ? "animate-slide-out" : "animate-slide-in",
           width === "lg" ? "max-w-2xl" : "max-w-md",
         )}
       >
         <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
           <div className="min-w-0">
-            <h2 className="truncate text-base font-bold tracking-tight text-ink">{title}</h2>
-            {description ? <p className="mt-0.5 text-[13px] text-muted">{description}</p> : null}
+            <h2 className="truncate text-base font-semibold tracking-tight text-ink">{view.title}</h2>
+            {view.description ? <p className="mt-0.5 text-[13px] text-muted">{view.description}</p> : null}
           </div>
           <IconButton label="Close" size="sm" onClick={onClose} className="-mr-2">
             <X size={16} />
           </IconButton>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
-        {footer ? <div className="flex flex-wrap justify-end gap-2 border-t border-line px-6 py-4">{footer}</div> : null}
+        <div className="flex-1 overflow-y-auto px-6 py-5">{view.children}</div>
+        {view.footer ? <div className="flex flex-wrap justify-end gap-2 border-t border-line px-6 py-4">{view.footer}</div> : null}
       </aside>
     </div>,
     document.body,

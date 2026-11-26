@@ -18,3 +18,4 @@ export * from "./Toast";
 export * from "./Elapsed";
 export * from "./NumberField";
 export * from "./SaveBar";
+export * from "./Metric";

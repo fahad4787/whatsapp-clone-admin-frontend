@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Download, ScrollText } from "lucide-react";
-import { Badge, Button, Callout, Card, CardToolbar, DataTable, EmptyState, PageHeader, Person, SearchInput, Select, type Column, type Tone } from "@/components/ui";
+import { Badge, Button, ErrorCallout, Card, CardToolbar, DataTable, EmptyState, PageHeader, Person, SearchInput, Select, type Column, type Tone } from "@/components/ui";
 import { useQuery } from "@/hooks/useQuery";
 import { adminApi, type AuditItem } from "@/lib/api";
 import { downloadCsv } from "@/lib/csv";
@@ -132,7 +132,7 @@ export default function AuditPage() {
         description="Every change made from this console, newest first (last 200)."
         actions={<Button variant="secondary" icon={<Download size={16} />} onClick={exportCsv} disabled={!rows.length}>Export CSV</Button>}
       />
-      {list.error ? <Callout tone="danger" className="mb-4">{list.error}</Callout> : null}
+      {list.error ? <ErrorCallout error={list.error} onRetry={list.reload} retrying={list.fetching} className="mb-4" /> : null}
       <Card>
         <CardToolbar>
           <SearchInput value={q} onChange={setQ} placeholder="Admin, action or detail" className="md:max-w-xs" aria-label="Search audit log" />

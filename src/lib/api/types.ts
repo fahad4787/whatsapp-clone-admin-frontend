@@ -86,6 +86,11 @@ export type Metrics = {
   calls_today?: number;
 };
 
+/** One UTC day of activity counts from /api/admin/metrics/series. */
+export type MetricsPoint = { date: string; signups: number; messages: number; calls: number };
+/** `points` covers 2 × `days`: the previous window followed by the current one. */
+export type MetricsSeries = { days: number; points: MetricsPoint[] };
+
 export type CallStatus = "ringing" | "active" | "ended" | "rejected" | "missed";
 
 export type CallItem = {
@@ -145,6 +150,12 @@ export type ConversationMessage = {
   attachment_name: string | null;
   attachment_mime: string | null;
   has_attachment: boolean;
+  /** Public media URL (absent on older backends and on messages deleted for everyone). */
+  attachment_url?: string | null;
+  attachment_thumbnail_url?: string | null;
+  attachment_size?: number | null;
+  attachment_width?: number | null;
+  attachment_height?: number | null;
 };
 
 export type ConversationDetail = ConversationItem & { messages: ConversationMessage[] };

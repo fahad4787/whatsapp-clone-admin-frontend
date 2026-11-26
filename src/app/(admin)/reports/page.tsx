@@ -7,7 +7,7 @@ import {
   Badge,
   Button,
   ButtonLink,
-  Callout,
+  ErrorCallout,
   Card,
   CardToolbar,
   EmptyState,
@@ -111,7 +111,7 @@ function ReportCard({ r, onDecide }: { r: ReportItem; onDecide: (r: ReportItem, 
       <div className="min-w-0 flex-1 space-y-3">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <Person name={name(r.reporter)} sub="Reporter" seed={r.reporter.id} size={30} />
-          <ArrowRight size={16} className="text-subtle" aria-label="reported" />
+          <ArrowRight size={16} className="shrink-0 text-muted" aria-label="reported" />
           {r.target_user ? (
             <Person name={name(r.target_user)} sub={r.target_user.phone} seed={r.target_user.id} size={30} />
           ) : (
@@ -140,7 +140,7 @@ function ReportCard({ r, onDecide }: { r: ReportItem; onDecide: (r: ReportItem, 
           <span title={fmtDateTime(r.created_at)}>Reported {timeAgo(r.created_at)}</span>
           {r.resolved_at ? <span>· Closed {fmtDateTime(r.resolved_at)}</span> : null}
           {convoId ? (
-            <Link href={`/conversations?id=${encodeURIComponent(convoId)}`} className="inline-flex items-center gap-1 font-semibold text-brand hover:text-brand-strong">
+            <Link href={`/conversations?id=${encodeURIComponent(convoId)}`} className="inline-flex items-center gap-1 font-semibold text-brand hover:text-brand-text">
               <MessagesSquare size={13} /> Open chat
             </Link>
           ) : null}
@@ -178,7 +178,7 @@ export default function ReportsPage() {
         description="What people reported from the app. Resolve, dismiss, or ban the reported user."
         actions={<ButtonLink href="/users?banned=1" variant="secondary">Banned users</ButtonLink>}
       />
-      {list.error ? <Callout tone="danger" className="mb-4">{list.error}</Callout> : null}
+      {list.error ? <ErrorCallout error={list.error} onRetry={list.reload} retrying={list.fetching} className="mb-4" /> : null}
       <Card>
         <CardToolbar>
           <Segmented

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { FileText, Scale } from "lucide-react";
-import { Callout, Card, CardToolbar, PageHeader, SaveBar, Segmented, Skeleton, Textarea } from "@/components/ui";
+import { ErrorCallout, Card, CardToolbar, PageHeader, SaveBar, Segmented, Skeleton, Textarea } from "@/components/ui";
 import { useAction } from "@/hooks/useAction";
 import { useDraft } from "@/hooks/useDraft";
 import { useQuery } from "@/hooks/useQuery";
@@ -37,7 +37,7 @@ export default function LegalPage() {
   return (
     <>
       <PageHeader title="Legal" description="Shown in the app under Settings → Help. Saving publishes right away." />
-      {q.error ? <Callout tone="danger" className="mb-4">{q.error}</Callout> : null}
+      {q.error ? <ErrorCallout error={q.error} onRetry={q.reload} retrying={q.fetching} className="mb-4" /> : null}
       <Card>
         <CardToolbar className="justify-between">
           <Segmented

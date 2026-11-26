@@ -5,7 +5,7 @@ import { Eye, EyeOff, KeyRound, Mail, Phone, Plus } from "lucide-react";
 import {
   Badge,
   Button,
-  Callout,
+  ErrorCallout,
   Card,
   CardToolbar,
   CopyButton,
@@ -152,7 +152,7 @@ export default function OtpsPage() {
         st === "Pending" && o.code ? (
           <CodeCell code={o.code} expiresAt={o.expires_at} now={now} />
         ) : (
-          <span className="text-subtle" title="Codes are hidden once they can no longer be used">—</span>
+          <span className="text-muted" title="Codes are hidden once they can no longer be used">—</span>
         ),
     },
     {
@@ -185,7 +185,7 @@ export default function OtpsPage() {
         actions={<Button icon={<Plus size={16} />} onClick={() => setGenOpen(true)}>Generate code</Button>}
       />
 
-      {list.error ? <Callout tone="danger" className="mb-4">{list.error}</Callout> : null}
+      {list.error ? <ErrorCallout error={list.error} onRetry={list.reload} retrying={list.fetching} className="mb-4" /> : null}
 
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         {CARDS.map((s) => (

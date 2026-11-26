@@ -4,10 +4,10 @@ import { cn } from "@/lib/cn";
 export type Tone = "brand" | "success" | "warning" | "danger" | "info" | "neutral";
 
 const TONES: Record<Tone, string> = {
-  brand: "bg-brand-soft text-brand-strong",
-  success: "bg-brand-soft text-brand-strong",
+  brand: "bg-brand-soft text-brand-text",
+  success: "bg-brand-soft text-brand-text",
   warning: "bg-warning-soft text-warning",
-  danger: "bg-danger-soft text-danger",
+  danger: "bg-danger-soft text-danger-text",
   info: "bg-info-soft text-info",
   neutral: "bg-surface-muted text-muted ring-1 ring-inset ring-line",
 };

@@ -1,14 +1,28 @@
 @import "tailwindcss";
 
+/* Opt-in dark theme: only when <html data-theme="dark"> is set (never automatic). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* ───────────────────────── Design tokens ─────────────────────────
-   One source of truth for colour, depth and motion. Components use the
-   Tailwind names from @theme (bg-brand, text-muted, border-line, …).     */
+   One source of truth for colour, depth, shape and motion. Components use the
+   Tailwind names from @theme (bg-brand, text-muted, border-line, …).
+
+   BRAND RULE: every hex below in the light theme is the original Aivora value.
+   Do not edit them. Extra tones are derived from these with color-mix().
+   See docs/DESIGN_SYSTEM.md.                                                 */
 :root {
+  color-scheme: light;
+
+  /* Brand (original) */
   --brand: #129a55;
   --brand-strong: #0b7a42;
   --brand-soft: #e9f8ef;
   --brand-ring: rgb(18 154 85 / 0.24);
+  /* Brand-coloured small text. #129a55 is 3.6:1 on white, so text uses the
+     existing #0b7a42 (5.4:1). Same hex as --brand-strong. */
+  --brand-text: #0b7a42;
 
+  /* Ink & neutrals (original) */
   --ink: #0c1612;
   --ink-soft: #2e3d36;
   --muted: #5b6b63;
@@ -20,16 +34,111 @@
   --surface: #ffffff;
   --surface-muted: #f7faf8;
 
+  /* Semantic (original) */
   --danger: #e11d48;
   --danger-strong: #be123c;
   --danger-soft: #fff1f3;
+  /* Danger text on the soft tint. #e11d48 is 4.3:1 on #fff1f3, so it uses the
+     existing #be123c (5.7:1). Same hex as --danger-strong. */
+  --danger-text: #be123c;
   --warning: #b45309;
   --warning-soft: #fff7ed;
   --info: #2563eb;
   --info-soft: #eff5ff;
+  /* Solid fills behind white text stay the original hex in every theme. */
+  --danger-solid: #e11d48;
+  --danger-solid-hover: #be123c;
 
-  --sidebar-w: 16rem;
-  --topbar-h: 3.75rem;
+  /* Derived */
+  --surface-hover: color-mix(in oklab, var(--ink) 4%, var(--surface));
+  --scrim: rgb(12 22 18 / 0.42);
+  --skeleton-a: #edf2ef;
+  --skeleton-b: #f6f9f7;
+  --knob: #ffffff;
+
+  /* Charts: one accent (brand), comparison in neutral ink. */
+  --chart-1: var(--brand);
+  --chart-1-fill: color-mix(in oklab, var(--brand) 14%, transparent);
+  --chart-compare: var(--subtle);
+  --chart-grid: var(--line);
+  --chart-axis: var(--muted);
+
+  /* Chat transcript (mirrors the mobile app's chat colours) */
+  --chat-bg: #efeae2;
+  --chat-dot: rgb(12 22 18 / 0.045);
+  --chat-in: #ffffff;
+  --chat-out: #d9fdd3;
+  --chat-day: #ffffff;
+  --chat-day-text: #54656f;
+  --chat-meta: #7a8a82;
+  --chat-read: #53bdeb;
+  --chat-shadow: rgb(12 22 18 / 0.08);
+
+  /* Shape */
+  --shape-xs: 6px;
+  --shape-sm: 8px;
+  --shape-md: 10px;
+  --shape-lg: 12px;
+  --shape-xl: 16px;
+
+  /* Motion */
+  --motion-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --motion-ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --dur-micro: 140ms;
+  --dur-base: 220ms;
+  --dur-layout: 320ms;
+
+  /* Layout */
+  --sidebar-w: 15.5rem;
+  --sidebar-w-collapsed: 4.25rem;
+  --topbar-h: 3.5rem;
+}
+
+/* Dark theme, derived tonally from the same palette: surfaces are the brand ink
+   #0c1612, text uses the light neutrals, semantic hues are lightened just enough
+   for WCAG AA on dark surfaces. #129a55 itself is unchanged. */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --brand-soft: color-mix(in oklab, #129a55 18%, #0c1612);
+  --brand-ring: rgb(18 154 85 / 0.38);
+  --brand-text: color-mix(in oklab, #129a55 78%, #f3f6f4);
+
+  --ink: #f3f6f4;
+  --ink-soft: #d2ddd6;
+  --muted: color-mix(in oklab, #8b9a93 80%, #f3f6f4);
+  --subtle: #8b9a93;
+
+  --line: color-mix(in oklab, #0c1612 86%, #f3f6f4);
+  --line-strong: color-mix(in oklab, #0c1612 78%, #f3f6f4);
+  --canvas: color-mix(in oklab, #0c1612 70%, #000000);
+  --surface: #0c1612;
+  --surface-muted: color-mix(in oklab, #0c1612 93%, #f3f6f4);
+
+  --danger: color-mix(in oklab, #e11d48 70%, #ffffff);
+  --danger-strong: color-mix(in oklab, #e11d48 55%, #ffffff);
+  --danger-soft: color-mix(in oklab, #e11d48 16%, #0c1612);
+  --danger-text: color-mix(in oklab, #e11d48 70%, #ffffff);
+  --warning: color-mix(in oklab, #b45309 60%, #ffffff);
+  --warning-soft: color-mix(in oklab, #b45309 18%, #0c1612);
+  --info: color-mix(in oklab, #2563eb 62%, #ffffff);
+  --info-soft: color-mix(in oklab, #2563eb 18%, #0c1612);
+
+  --surface-hover: color-mix(in oklab, #f3f6f4 5%, #0c1612);
+  --scrim: rgb(0 0 0 / 0.6);
+  --skeleton-a: color-mix(in oklab, #0c1612 90%, #f3f6f4);
+  --skeleton-b: color-mix(in oklab, #0c1612 84%, #f3f6f4);
+  --knob: #f3f6f4;
+
+  --chat-bg: color-mix(in oklab, #0c1612 70%, #000000);
+  --chat-dot: rgb(243 246 244 / 0.04);
+  --chat-in: color-mix(in oklab, #0c1612 88%, #f3f6f4);
+  --chat-out: color-mix(in oklab, #129a55 32%, #0c1612);
+  --chat-day: color-mix(in oklab, #0c1612 88%, #f3f6f4);
+  --chat-day-text: #d2ddd6;
+  --chat-meta: color-mix(in oklab, #8b9a93 80%, #f3f6f4);
+  --chat-shadow: rgb(0 0 0 / 0.3);
 }
 
 @theme inline {
@@ -37,6 +146,7 @@
   --color-brand-strong: var(--brand-strong);
   --color-brand-soft: var(--brand-soft);
   --color-brand-ring: var(--brand-ring);
+  --color-brand-text: var(--brand-text);
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-muted: var(--muted);
@@ -46,42 +156,86 @@
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
+  --color-surface-hover: var(--surface-hover);
   --color-danger: var(--danger);
   --color-danger-strong: var(--danger-strong);
   --color-danger-soft: var(--danger-soft);
+  --color-danger-text: var(--danger-text);
+  --color-danger-solid: var(--danger-solid);
+  --color-danger-solid-hover: var(--danger-solid-hover);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+  --color-scrim: var(--scrim);
+  --color-knob: var(--knob);
+
+  --radius-xs: var(--shape-xs);
+  --radius-sm: var(--shape-sm);
+  --radius-md: var(--shape-md);
+  --radius-lg: var(--shape-lg);
+  --radius-xl: var(--shape-xl);
 
   --shadow-xs: 0 1px 2px rgb(12 22 18 / 0.05);
-  --shadow-card: 0 1px 2px rgb(12 22 18 / 0.04), 0 4px 16px -4px rgb(12 22 18 / 0.06);
-  --shadow-pop: 0 12px 40px -8px rgb(12 22 18 / 0.18), 0 2px 6px rgb(12 22 18 / 0.06);
+  --shadow-card: 0 1px 2px rgb(12 22 18 / 0.04), 0 2px 8px -2px rgb(12 22 18 / 0.04);
+  --shadow-raised: 0 1px 2px rgb(12 22 18 / 0.05), 0 8px 24px -8px rgb(12 22 18 / 0.1);
+  --shadow-pop: 0 16px 48px -12px rgb(12 22 18 / 0.22), 0 2px 6px rgb(12 22 18 / 0.06);
+
+  --ease-out: var(--motion-ease-out);
+  --ease-in-out: var(--motion-ease-in-out);
 
   --font-sans: var(--font-plus-jakarta), system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, monospace;
 
-  --animate-fade-in: fade-in 160ms ease-out both;
-  --animate-pop-in: pop-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-slide-in: slide-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-slide-in-left: slide-in-left 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-toast-in: toast-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-in: fade-in var(--dur-micro) ease-out both;
+  --animate-fade-out: fade-out var(--dur-micro) ease-in both;
+  --animate-pop-in: pop-in var(--dur-base) var(--motion-ease-out) both;
+  --animate-pop-out: pop-out 160ms var(--motion-ease-in) both;
+  --animate-slide-in: slide-in var(--dur-layout) var(--motion-ease-out) both;
+  --animate-slide-out: slide-out 200ms var(--motion-ease-in) both;
+  --animate-slide-in-left: slide-in-left var(--dur-layout) var(--motion-ease-out) both;
+  --animate-toast-in: toast-in var(--dur-base) var(--motion-ease-out) both;
+  --animate-toast-out: toast-out 160ms var(--motion-ease-in) both;
+  --animate-page-in: page-in var(--dur-layout) var(--motion-ease-out) both;
+  --animate-rise: rise 420ms var(--motion-ease-out) both;
+}
+
+[data-theme="dark"] {
+  --shadow-card: 0 0 0 1px rgb(0 0 0 / 0.2);
 }
 
 @keyframes fade-in {
   from { opacity: 0; }
 }
+@keyframes fade-out {
+  to { opacity: 0; }
+}
 @keyframes pop-in {
   from { opacity: 0; transform: translateY(6px) scale(0.98); }
 }
+@keyframes pop-out {
+  to { opacity: 0; transform: translateY(4px) scale(0.98); }
+}
 @keyframes slide-in {
-  from { opacity: 0.6; transform: translateX(24px); }
+  from { opacity: 0.6; transform: translateX(32px); }
+}
+@keyframes slide-out {
+  to { opacity: 0; transform: translateX(32px); }
 }
 @keyframes slide-in-left {
   from { opacity: 0.6; transform: translateX(-24px); }
 }
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+@keyframes toast-out {
+  to { opacity: 0; transform: translateX(16px); }
+}
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(4px); }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
 }
 @keyframes shimmer {
   from { background-position: 200% 0; }
@@ -98,6 +252,7 @@
     color: var(--ink);
     font-size: 14px;
     line-height: 1.5;
+    font-feature-settings: "cv11", "ss01";
   }
   :focus-visible {
     outline: 2px solid var(--brand);
@@ -105,12 +260,22 @@
   }
   ::selection {
     background: var(--brand-soft);
-    color: var(--brand-strong);
+    color: var(--brand-text);
   }
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--line-strong) transparent;
   }
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+}
+
+/* Theme switch: suppress transitions for one frame so colours swap instantly. */
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -118,15 +283,42 @@
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
 .skeleton {
-  border-radius: 6px;
-  background: linear-gradient(90deg, #edf2ef 0%, #f6f9f7 50%, #edf2ef 100%);
+  border-radius: var(--shape-xs);
+  background: linear-gradient(90deg, var(--skeleton-a) 0%, var(--skeleton-b) 50%, var(--skeleton-a) 100%);
   background-size: 200% 100%;
   animation: shimmer 1.4s linear infinite;
+}
+
+/* Numbers that sit in columns line up; headline numbers keep proportional figures. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Line charts draw in once (path needs pathLength="1"). */
+.chart-draw {
+  stroke-dasharray: 1;
+  animation: chart-draw 480ms var(--motion-ease-out) both;
+}
+@keyframes chart-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Data refresh: keep the previous frame visible, dimmed, while new data loads. */
+.is-refetching {
+  opacity: 0.6;
+  transition: opacity var(--dur-base) ease;
 }
 
 /* Aivora animated brand mark */
@@ -249,6 +441,7 @@
   }
 }
 
+
 /* ───────────────────────── Chat transcript (mirrors the app) ───────────────────────── */
 .chat {
   display: flex;
@@ -259,9 +452,9 @@
   min-height: 16rem;
   overflow-y: auto;
   border: 1px solid var(--line);
-  border-radius: 0.875rem;
-  background-color: #efeae2;
-  background-image: radial-gradient(rgb(12 22 18 / 0.045) 1px, transparent 1px);
+  border-radius: var(--shape-lg);
+  background-color: var(--chat-bg);
+  background-image: radial-gradient(var(--chat-dot) 1px, transparent 1px);
   background-size: 18px 18px;
 }
 .chat-day {
@@ -269,23 +462,23 @@
   margin: 0.7rem 0 0.4rem;
   padding: 0.2rem 0.7rem;
   border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 1px 1px rgb(12 22 18 / 0.08);
+  background: var(--chat-day);
+  box-shadow: 0 1px 1px var(--chat-shadow);
   font-size: 0.7rem;
-  color: #54656f;
+  color: var(--chat-day-text);
 }
 .bubble {
   max-width: 82%;
   padding: 0.45rem 0.7rem 0.35rem;
   border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 1px 1px rgb(12 22 18 / 0.08);
+  background: var(--chat-in);
+  box-shadow: 0 1px 1px var(--chat-shadow);
   font-size: 0.875rem;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
 .bubble--in { align-self: flex-start; }
-.bubble--out { align-self: flex-end; background: #d9fdd3; }
+.bubble--out { align-self: flex-end; background: var(--chat-out); }
 .bubble--in.bubble--tail { border-top-left-radius: 2px; }
 .bubble--out.bubble--tail { border-top-right-radius: 2px; }
 .bubble--gap { margin-top: 0.6rem; }
@@ -296,5 +489,6 @@
   justify-content: flex-end;
   margin-top: 0.1rem;
   font-size: 0.68rem;
-  color: #7a8a82;
+  color: var(--chat-meta);
 }
+.chat-read { color: var(--chat-read); }

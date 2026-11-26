@@ -19,7 +19,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-export type NavItem = { href: string; label: string; icon: LucideIcon; description: string };
+/** Metric shown as a count next to the nav item (from /api/admin/metrics). */
+export type NavBadge = { metric: "reports_open" | "calls_active"; tone: "warning" | "live"; label: string };
+export type NavItem = { href: string; label: string; icon: LucideIcon; description: string; keywords?: string; badge?: NavBadge };
 export type NavGroup = { id: string; label: string; items: NavItem[] };
 
 /** Single source of truth for the sidebar, the topbar title and page descriptions. */
@@ -34,11 +36,11 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Activity",
     items: [
       { href: "/users", label: "Users", icon: Users, description: "Search, create, ban and remove accounts." },
-      { href: "/otps", label: "OTP log", icon: KeyRound, description: "Verification codes sent to phones." },
+      { href: "/otps", label: "OTP log", icon: KeyRound, description: "Verification codes sent to phones.", keywords: "otp sms verification generate code" },
       { href: "/conversations", label: "Conversations", icon: MessagesSquare, description: "Inspect chats and groups for moderation." },
-      { href: "/live", label: "Live calls", icon: Radio, description: "Calls that are ringing or in progress right now." },
+      { href: "/live", label: "Live calls", icon: Radio, description: "Calls that are ringing or in progress right now.", keywords: "active ringing realtime", badge: { metric: "calls_active", tone: "live", label: "live now" } },
       { href: "/calls", label: "Call history", icon: Phone, description: "Every voice and video call." },
-      { href: "/reports", label: "Reports", icon: Flag, description: "User reports waiting for review." },
+      { href: "/reports", label: "Reports", icon: Flag, description: "User reports waiting for review.", keywords: "moderation abuse flag", badge: { metric: "reports_open", tone: "warning", label: "open" } },
     ],
   },
   {
@@ -48,7 +50,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/countries", label: "Countries", icon: Globe2, description: "Where people can sign up." },
       { href: "/settings", label: "Settings", icon: Settings, description: "Limits and behaviour of the app." },
       { href: "/legal", label: "Legal", icon: Scale, description: "Terms of service and privacy policy." },
-      { href: "/android", label: "Android app", icon: Smartphone, description: "Release versions and forced updates." },
+      { href: "/android", label: "Android app", icon: Smartphone, description: "Release versions and forced updates.", keywords: "apk version update release" },
       { href: "/stickers", label: "Stickers", icon: Sticker, description: "Sticker packs shipped with the app." },
       { href: "/channels", label: "Channels", icon: Megaphone, description: "Broadcast channels and their posts." },
     ],
@@ -59,8 +61,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admins", label: "Admin users", icon: Shield, description: "People who can sign in to this console." },
       { href: "/audit", label: "Audit log", icon: ScrollText, description: "Every action taken by an admin." },
-      { href: "/security", label: "Security", icon: Lock, description: "Sign-in protection for this console." },
-      { href: "/firewall", label: "IP access", icon: ShieldBan, description: "Limit console sign-in to known networks." },
+      { href: "/security", label: "Security", icon: Lock, description: "Sign-in protection for this console.", keywords: "2fa password session" },
+      { href: "/firewall", label: "IP access", icon: ShieldBan, description: "Limit console sign-in to known networks.", keywords: "firewall allowlist ip" },
     ],
   },
 ];
@@ -74,4 +76,8 @@ export function isActivePath(pathname: string, href: string) {
 
 export function navItemFor(pathname: string): NavItem | undefined {
   return NAV_ITEMS.find((i) => isActivePath(pathname, i.href));
+}
+
+export function navGroupFor(pathname: string): NavGroup | undefined {
+  return NAV_GROUPS.find((g) => g.items.some((i) => isActivePath(pathname, i.href)));
 }

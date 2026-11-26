@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme-script";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -17,6 +18,10 @@ const jetbrains = JetBrains_Mono({
   display: "swap",
 });
 
+export const viewport: Viewport = {
+  themeColor: [{ color: "#f3f6f4" }],
+};
+
 export const metadata: Metadata = {
   title: "Aivora Admin",
   description: "Admin console for Aivora",
@@ -29,7 +34,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${plusJakarta.variable} ${jetbrains.variable}`}>
+    <html lang="en" className={`${plusJakarta.variable} ${jetbrains.variable}`} suppressHydrationWarning>
+      <head>
+        {/* Applies the saved theme before first paint (no flash). Static string, no user input. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body className="font-sans antialiased" suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>

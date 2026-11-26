@@ -5,7 +5,7 @@ import { BadgeCheck, Eye, EyeOff, Megaphone, Newspaper, Pencil, Plus, Trash2 } f
 import {
   Badge,
   Button,
-  Callout,
+  ErrorCallout,
   Card,
   CardToolbar,
   DataTable,
@@ -126,7 +126,7 @@ function PostsDrawer({ channel, onClose }: { channel: ChannelItem | null; onClos
   const items = posts.data?.items ?? [];
   return (
     <Drawer open={!!channel} onClose={onClose} title={channel ? `${channel.name} posts` : "Posts"} description="Latest 50 posts, newest first.">
-      {posts.error ? <Callout tone="danger">{posts.error}</Callout> : null}
+      {posts.error ? <ErrorCallout error={posts.error} onRetry={posts.reload} retrying={posts.fetching} /> : null}
       {!posts.data ? (
         <div className="space-y-3">{Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-20" />)}</div>
       ) : items.length ? (
@@ -199,6 +199,7 @@ export default function ChannelsPage() {
     {
       key: "channel",
       header: "Channel",
+      sortValue: (c) => c.name,
       cell: (c) => (
         <span className="flex items-center gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand"><Megaphone size={16} /></span>
@@ -212,21 +213,22 @@ export default function ChannelsPage() {
         </span>
       ),
     },
-    { key: "followers", header: "Followers", align: "right", hideBelow: "sm", className: "tabular-nums", cell: (c) => fmtNumber(c.followers) },
+    { key: "followers", header: "Followers", sortValue: (c) => c.followers, align: "right", hideBelow: "sm", className: "tabular-nums", cell: (c) => fmtNumber(c.followers) },
     {
       key: "posts",
       header: "Posts",
+      sortValue: (c) => c.posts,
       align: "right",
       hideBelow: "xl",
       cell: (c) => (
-        <button type="button" onClick={() => setPostsFor(c)} className="font-semibold tabular-nums text-brand hover:text-brand-strong">
+        <button type="button" onClick={() => setPostsFor(c)} className="rounded font-semibold tnum text-brand-text underline-offset-2 hover:underline">
           {fmtNumber(c.posts)}
         </button>
       ),
     },
     { key: "verified", header: "Verified", align: "center", hideBelow: "lg", cell: (c) => <Switch size="sm" label={`Verified: ${c.name}`} checked={c.verified} disabled={isPending(`${c.id}:verified`)} onChange={(v) => void toggle(c, "verified", v)} /> },
     { key: "listed", header: "Listed", align: "center", hideBelow: "lg", cell: (c) => <Switch size="sm" label={`Listed: ${c.name}`} checked={c.listed} disabled={isPending(`${c.id}:listed`)} onChange={(v) => void toggle(c, "listed", v)} /> },
-    { key: "created", header: "Created", hideBelow: "xl", className: "whitespace-nowrap text-muted", cell: (c) => fmtDate(c.created_at) },
+    { key: "created", header: "Created", sortValue: (c) => Date.parse(c.created_at), hideBelow: "xl", className: "whitespace-nowrap text-muted", cell: (c) => fmtDate(c.created_at) },
     {
       key: "actions",
       header: <span className="sr-only">Actions</span>,
@@ -249,7 +251,7 @@ export default function ChannelsPage() {
         description="Broadcast channels people follow in the app's Updates tab."
         actions={<Button icon={<Plus size={16} />} onClick={() => setModal({ channel: null })}>New channel</Button>}
       />
-      {list.error ? <Callout tone="danger" className="mb-4">{list.error}</Callout> : null}
+      {list.error ? <ErrorCallout error={list.error} onRetry={list.reload} retrying={list.fetching} className="mb-4" /> : null}
       <Card>
         <CardToolbar>
           <SearchInput value={q} onChange={setQ} placeholder="Search channels" className="md:max-w-xs" aria-label="Search channels" />

@@ -19,7 +19,7 @@ export function SaveBar({ count, saving, blockedReason, onSave, onReset }: SaveB
       <div
         role="region"
         aria-label="Unsaved changes"
-        className="pointer-events-auto flex w-full max-w-xl animate-pop-in items-center gap-3 rounded-2xl border border-line bg-surface/95 py-2.5 pl-4 pr-2.5 shadow-pop backdrop-blur"
+        className="pointer-events-auto flex w-full max-w-xl animate-pop-in items-center gap-3 rounded-xl border border-line bg-surface/95 py-2.5 pl-4 pr-2.5 shadow-pop backdrop-blur"
       >
         <span className="h-2 w-2 shrink-0 rounded-full bg-warning" aria-hidden />
         <p className="min-w-0 flex-1 text-sm">

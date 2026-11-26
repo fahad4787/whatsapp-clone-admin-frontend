@@ -5,7 +5,7 @@ import { Eye, EyeOff, ShieldCheck, UserPlus, UsersRound } from "lucide-react";
 import {
   Badge,
   Button,
-  Callout,
+  Callout, ErrorCallout,
   Card,
   DataTable,
   EmptyState,
@@ -133,6 +133,7 @@ export default function AdminsPage() {
     {
       key: "who",
       header: "Admin",
+      sortValue: (a) => a.display_name || a.email,
       cell: (a) => (
         <Person
           name={a.display_name || a.email}
@@ -143,7 +144,7 @@ export default function AdminsPage() {
       ),
     },
     { key: "role", header: "Role", cell: (a) => <Badge tone={ROLE[a.role].tone}>{ROLE[a.role].label}</Badge> },
-    { key: "added", header: "Added", hideBelow: "sm", className: "whitespace-nowrap text-muted", cell: (a) => fmtDate(a.created_at) },
+    { key: "added", header: "Added", sortValue: (a) => Date.parse(a.created_at), hideBelow: "sm", className: "whitespace-nowrap text-muted", cell: (a) => fmtDate(a.created_at) },
   ];
 
   return (
@@ -154,7 +155,7 @@ export default function AdminsPage() {
         description="People who can sign in to this console."
         actions={isSuper ? <Button icon={<UserPlus size={16} />} onClick={() => setInviteOpen(true)}>Add admin</Button> : undefined}
       />
-      {list.error ? <Callout tone="danger" className="mb-4">{list.error}</Callout> : null}
+      {list.error ? <ErrorCallout error={list.error} onRetry={list.reload} retrying={list.fetching} className="mb-4" /> : null}
       {me.role === "MOD" ? (
         <Callout tone="info" className="mb-4" title="Only super admins can add admins">
           Ask a super admin if someone needs access.

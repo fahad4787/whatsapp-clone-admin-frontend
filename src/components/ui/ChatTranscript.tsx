@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { Ban, CornerUpRight, Paperclip } from "lucide-react";
+import { Ban, CornerUpRight } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { fmtTime } from "@/lib/format";
 import type { ConversationMessage } from "@/lib/api";
+import { MessageAttachment } from "./Attachment";
 
 type Props = {
   messages: ConversationMessage[];
@@ -19,7 +20,7 @@ const dayKey = (iso: string) => new Date(iso).toDateString();
 function Ticks({ status }: { status: string }) {
   if (status !== "sent" && status !== "delivered" && status !== "read") return null;
   return (
-    <span aria-label={status} className={cn("font-bold tracking-tighter", status === "read" && "text-[#53bdeb]")}>
+    <span aria-label={status} className={cn("font-bold tracking-tighter", status === "read" && "chat-read")}>
       {status === "sent" ? "✓" : "✓✓"}
     </span>
   );
@@ -56,7 +57,7 @@ export function ChatTranscript({ messages, perspectiveId, isGroup }: Props) {
           <div key={m.id} className="contents">
             {newDay ? <div className="chat-day">{dayFmt.format(new Date(m.created_at))}</div> : null}
             <div className={cn("bubble", mine ? "bubble--out" : "bubble--in", firstOfRun && "bubble--tail", firstOfRun && !newDay && "bubble--gap")}>
-              {isGroup && !mine && firstOfRun ? <div className="mb-0.5 text-xs font-bold text-brand">{m.sender_name}</div> : null}
+              {isGroup && !mine && firstOfRun ? <div className="mb-0.5 text-xs font-bold text-brand-text">{m.sender_name}</div> : null}
               {m.forwarded ? (
                 <div className="mb-0.5 flex items-center gap-1 text-[11px] italic text-muted">
                   <CornerUpRight size={11} /> Forwarded
@@ -68,12 +69,7 @@ export function ChatTranscript({ messages, perspectiveId, isGroup }: Props) {
                 </div>
               ) : (
                 <>
-                  {m.has_attachment ? (
-                    <div className="mb-0.5 flex items-center gap-1.5 text-ink-soft">
-                      <Paperclip size={13} className="text-muted" />
-                      <span className="truncate">{m.attachment_name ?? m.attachment_mime ?? m.type}</span>
-                    </div>
-                  ) : null}
+                  {m.has_attachment ? <MessageAttachment m={m} /> : null}
                   {m.text ? <div className="whitespace-pre-wrap break-words text-ink">{m.text}</div> : null}
                   {!m.text && !m.has_attachment ? <div className="text-muted">[{m.type}]</div> : null}
                 </>
