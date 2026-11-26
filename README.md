@@ -1,45 +1,33 @@
-# Aivora Admin (Dev)
+# Aivora Admin
 
-Next.js 15 admin console for Aivora — Soft UI + brand green, config-driven list pages, mock data until the API is wired.
-
-## Knowledge graph
-
-Architecture questions should go through **graphify** (not blind search):
-
-```bash
-cd aivora-admin
-graphify query "How does ResourcePage connect to list pages?"
-open graphify-out/graph.html   # interactive map
-```
-
-Rebuild after large refactors: `/graphify src` (AST extract of `src/`). Outputs live in `graphify-out/` (gitignored).
+Next.js 15 admin console for Aivora. It talks to `aivora-backend` (`/api/admin/*`). Pages and APIs are listed in [docs/ADMIN_MAP.md](docs/ADMIN_MAP.md), tokens and components in [design-system.md](design-system.md).
 
 ## Architecture
 
 ```
 src/
-  app/                 # Next.js App Router — thin route files only
-    (admin)/           # Authenticated shell routes
-    login/             # Auth screen
+  app/
+    (admin)/        # one folder per page, all behind the auth shell
+    login/          # sign-in + 2FA
   components/
-    layout/            # AdminShell, Sidebar
-    ui/                # Shared primitives (Button, Search, Select, …)
-    data/              # DataTable + ResourcePage (mapping-driven lists)
-  config/              # Nav, app constants (no secrets)
-  data/                # Mock datasets (swap for API clients later)
-  features/
-    resources/         # Table/filter/action configs per resource
-    dashboard/         # Dashboard chart/stat configs
-    settings/          # Settings form schema
-  types/               # Shared domain types
+    layout/         # AdminShell, Sidebar, Topbar
+    ui/             # design-system primitives
+    calls/          # call table cells shared by Live + History
+    brand/          # logo
+  config/           # nav (single source for sidebar + titles), constants
+  hooks/            # useQuery, useAction, useDraft, useAdminCallsStream, …
+  lib/
+    api/            # http client (auth, refresh, errors), endpoints, DTO types
+    errors.ts       # backend error code → message
+    status.ts       # status labels + badge tones
+    format.ts csv.ts validate.ts cn.ts
 ```
 
 **Rules of thumb**
 
-- Routes stay thin: `return <ResourcePage {...usersResource} />`
-- UI primitives live in `components/ui` — pages never duplicate table markup
-- New list screens = add a resource config in `features/resources`, then a 3-line page
-- Mock data is isolated in `data/` so API wiring is a drop-in replacement
+- Pages fetch with `useQuery` and write with `useAction`. No page calls `fetch` directly.
+- UI comes from `@/components/ui`, and colours come from tokens only.
+- Validation matches the backend's limits, so a form never sends something the API rejects.
 
 ## Run
 
@@ -49,13 +37,13 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000/login](http://localhost:3000/login). Mock sign-in accepts any email/password (`localStorage` session only).
+Set `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:8080`). Open [http://localhost:3000/login](http://localhost:3000/login) and sign in with an admin account from the backend.
 
 ## Routes
 
 | Path | Page |
 |------|------|
-| `/login` | Admin login + APK card |
+| `/login` | Admin sign-in + 2FA |
 | `/` | Dashboard |
 | `/users` | Users |
 | `/otps` | OTP log |
@@ -67,7 +55,7 @@ Open [http://localhost:3000/login](http://localhost:3000/login). Mock sign-in ac
 | `/settings` | Settings |
 | `/legal` | Legal |
 | `/android` | Android app |
-| `/stickers` | Stickers |
+| `/stickers` | Sticker packs |
 | `/channels` | Channels |
 | `/admins` | Admin users |
 | `/audit` | Audit log |
@@ -76,11 +64,5 @@ Open [http://localhost:3000/login](http://localhost:3000/login). Mock sign-in ac
 
 ## Security
 
-- Do not commit live admin passwords or SMS/email secrets.
-- Download URL and branding live in `src/config/constants.ts` (dummy CDN for now).
-- Backend wiring comes next — UI uses `src/data/mock.ts`.
-
-## Next steps
-
-1. Replace `data/mock` with API clients.
-2. Point the Android Dev app (`com.aivora.app.dev`) at that API.
+- Do not commit admin passwords or SMS/email secrets.
+- The session token lives in `localStorage`. The server checks the token and role on every request, and checks the IP allow-list at sign-in.

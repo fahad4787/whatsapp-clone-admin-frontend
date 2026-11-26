@@ -1,59 +1,40 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { STORAGE_KEYS } from "@/config/constants";
-import { apiBaseUrl, type AdminCallItem } from "@/lib/api";
-
-export type AdminCallsStreamPayload = {
-  type: "calls";
-  items: AdminCallItem[];
-  count: number;
-  calls_active: number;
-  calls_today: number;
-};
+import { adminApi, getAdminToken, type CallsSnapshot } from "@/lib/api";
 
 /**
- * Subscribe to admin call SSE. Updates push whenever a call starts/answers/ends.
- * Falls back to a quiet poll if EventSource fails (proxy / CORS).
+ * Live call snapshots over SSE, pushed whenever a call starts, is answered or ends.
+ * Falls back to polling every 5 s when EventSource fails (proxy / CORS) and retries SSE every 15 s.
  */
-export function useAdminCallsStream(
-  onSnapshot: (payload: AdminCallsStreamPayload) => void,
-  enabled = true,
-) {
+export function useAdminCallsStream(onSnapshot: (snap: CallsSnapshot) => void, enabled = true) {
   const cb = useRef(onSnapshot);
   cb.current = onSnapshot;
 
   useEffect(() => {
-    if (!enabled || typeof window === "undefined") return;
+    if (!enabled) return;
+    const token = getAdminToken();
+    if (!token) return;
 
     let stopped = false;
     let es: EventSource | null = null;
     let pollTimer: number | null = null;
     let retryTimer: number | null = null;
 
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-    if (!token) return;
+    const stopPolling = () => {
+      if (pollTimer != null) window.clearInterval(pollTimer);
+      pollTimer = null;
+    };
 
-    const startPollFallback = () => {
+    const startPolling = () => {
       if (pollTimer != null) return;
       const tick = async () => {
-        if (stopped) return;
+        if (stopped || document.hidden) return;
         try {
-          const res = await fetch(`${apiBaseUrl()}/api/admin/calls/live`, {
-            headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-            cache: "no-store",
-          });
-          if (!res.ok) return;
-          const data = (await res.json()) as { items: AdminCallItem[]; count: number };
-          cb.current({
-            type: "calls",
-            items: data.items,
-            count: data.count,
-            calls_active: data.count,
-            calls_today: 0,
-          });
+          const data = await adminApi.calls.live();
+          cb.current({ items: data.items, count: data.count, calls_active: data.count, calls_today: -1 });
         } catch {
-          /* ignore */
+          /* ignore — next tick retries */
         }
       };
       void tick();
@@ -62,27 +43,23 @@ export function useAdminCallsStream(
 
     const connect = () => {
       if (stopped) return;
-      const url = `${apiBaseUrl()}/api/admin/calls/stream?token=${encodeURIComponent(token)}`;
-      es = new EventSource(url);
+      es = new EventSource(adminApi.calls.streamUrl(token));
+      es.onopen = stopPolling;
       es.onmessage = (ev) => {
         try {
-          const data = JSON.parse(ev.data) as AdminCallsStreamPayload;
+          const data = JSON.parse(ev.data) as CallsSnapshot & { type?: string };
           if (data?.type === "calls") cb.current(data);
         } catch {
-          /* ignore bad frames */
+          /* ignore malformed frames */
         }
       };
       es.onerror = () => {
         es?.close();
         es = null;
-        startPollFallback();
+        startPolling();
         if (!stopped && retryTimer == null) {
           retryTimer = window.setTimeout(() => {
             retryTimer = null;
-            if (pollTimer != null) {
-              window.clearInterval(pollTimer);
-              pollTimer = null;
-            }
             connect();
           }, 15_000);
         }
@@ -90,11 +67,10 @@ export function useAdminCallsStream(
     };
 
     connect();
-
     return () => {
       stopped = true;
       es?.close();
-      if (pollTimer != null) window.clearInterval(pollTimer);
+      stopPolling();
       if (retryTimer != null) window.clearTimeout(retryTimer);
     };
   }, [enabled]);

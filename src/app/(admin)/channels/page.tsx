@@ -1,244 +1,271 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { Alert, DataTable, FilterBar, PageHeader, RefreshButton, StatusBadge, type Column } from "@/components/ui";
-import { useAdminList } from "@/hooks/useAdminList";
+import { useMemo, useState } from "react";
+import { BadgeCheck, Eye, EyeOff, Megaphone, Newspaper, Pencil, Plus, Trash2 } from "lucide-react";
 import {
-  createAdminChannel,
-  deleteAdminChannel,
-  fetchAdminChannelPosts,
-  fetchAdminChannels,
-  getAdminToken,
-  hideAdminChannelPost,
-  patchAdminChannel,
-  type AdminChannelItem,
-  type AdminChannelPostItem,
-} from "@/lib/api";
+  Badge,
+  Button,
+  Callout,
+  Card,
+  CardToolbar,
+  DataTable,
+  Drawer,
+  EmptyState,
+  Field,
+  IconButton,
+  Input,
+  Modal,
+  PageHeader,
+  SearchInput,
+  Skeleton,
+  Switch,
+  SwitchRow,
+  Textarea,
+  useConfirm,
+  type Column,
+} from "@/components/ui";
+import { useAction } from "@/hooks/useAction";
+import { useQuery } from "@/hooks/useQuery";
+import { adminApi, type ChannelItem, type ChannelPost } from "@/lib/api";
+import { fmtDate, fmtDateTime, fmtNumber } from "@/lib/format";
 
-export default function ChannelsPage() {
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [newName, setNewName] = useState("");
-  const [q, setQ] = useState("");
-  const [visibility, setVisibility] = useState("all");
-  const [selected, setSelected] = useState<AdminChannelItem | null>(null);
-  const [posts, setPosts] = useState<AdminChannelPostItem[]>([]);
-  const [postsLoading, setPostsLoading] = useState(false);
+type Form = { name: string; description: string; verified: boolean; listed: boolean };
+const EMPTY: Form = { name: "", description: "", verified: false, listed: true };
 
-  const fetcher = useCallback(async (t: string) => (await fetchAdminChannels(t)).items, []);
-  const { items, setItems, loading, error, reload } = useAdminList(fetcher, {
-    interval: 30_000,
-    errorMessage: "Could not load channels — check your connection",
-  });
+/** Create (channel = null) or edit a channel. */
+function ChannelModal({
+  open,
+  channel,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  channel: ChannelItem | null;
+  onClose: () => void;
+  onSaved: (c: ChannelItem) => void;
+}) {
+  const { run, isPending } = useAction();
+  const [form, setForm] = useState<Form>(EMPTY);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const [touched, setTouched] = useState(false);
+  const key = open ? (channel?.id ?? "new") : null;
+  if (key !== loadedFor) {
+    setLoadedFor(key);
+    setTouched(false);
+    setForm(channel ? { name: channel.name, description: channel.description ?? "", verified: channel.verified, listed: channel.listed } : EMPTY);
+  }
 
-  /** Shared busy/error handling for per-channel actions. */
-  const run = useCallback(
-    async (id: string, failMsg: string, action: (token: string) => Promise<void>) => {
-      const token = getAdminToken();
-      if (!token) return;
-      setBusyId(id);
-      setActionError(null);
-      try {
-        await action(token);
-      } catch {
-        setActionError(failMsg);
-      } finally {
-        setBusyId(null);
-      }
-    },
-    [],
-  );
+  const name = form.name.trim();
+  const description = form.description.trim();
+  const errors = {
+    name: name.length < 2 ? "At least 2 characters." : name.length > 80 ? "Up to 80 characters." : null,
+    description: description.length > 500 ? "Up to 500 characters." : null,
+  };
 
-  const patch = useCallback(
-    (c: AdminChannelItem, change: { listed?: boolean; verified?: boolean }) =>
-      run(c.id, "Update failed", async (t) => {
-        const updated = await patchAdminChannel(t, c.id, change);
-        setItems((list) => list.map((row) => (row.id === updated.id ? updated : row)));
-      }),
-    [run, setItems],
-  );
-
-  const remove = useCallback(
-    (c: AdminChannelItem) => {
-      if (!window.confirm(`Delete channel “${c.name}”?`)) return;
-      return run(c.id, "Delete failed", async (t) => {
-        await deleteAdminChannel(t, c.id);
-        setSelected((s) => (s?.id === c.id ? null : s));
-        setItems((list) => list.filter((row) => row.id !== c.id));
-      });
-    },
-    [run, setItems],
-  );
-
-  const openPosts = useCallback(
-    async (c: AdminChannelItem) => {
-      const token = getAdminToken();
-      if (!token) return;
-      setSelected(c);
-      setPostsLoading(true);
-      setPosts([]);
-      try {
-        setPosts((await fetchAdminChannelPosts(token, c.id)).items);
-      } catch {
-        setActionError("Could not load posts");
-      } finally {
-        setPostsLoading(false);
-      }
-    },
-    [],
-  );
-
-  async function create() {
-    if (!newName.trim()) return;
-    await run("create", "Create failed", async (t) => {
-      await createAdminChannel(t, { name: newName.trim(), listed: true });
-      setNewName("");
-      await reload();
+  const submit = async () => {
+    setTouched(true);
+    if (errors.name || errors.description) return;
+    const body = { name, description: description || null, verified: form.verified, listed: form.listed };
+    const saved = await run("save", () => (channel ? adminApi.channels.update(channel.id, body) : adminApi.channels.create(body)), {
+      success: channel ? "Channel updated" : "Channel created",
+      errorTitle: "Couldn't save channel",
     });
-  }
-
-  async function hidePost(postId: string) {
-    const token = getAdminToken();
-    if (!token || !selected) return;
-    try {
-      await hideAdminChannelPost(token, selected.id, postId);
-      setPosts((list) => list.map((p) => (p.id === postId ? { ...p, deleted: true } : p)));
-    } catch {
-      setActionError("Hide post failed");
+    if (saved) {
+      onSaved(saved);
+      onClose();
     }
-  }
-
-  const rows = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return items.filter(
-      (c) =>
-        (visibility === "all" || (visibility === "listed") === c.listed) &&
-        (!needle || `${c.name} ${c.slug}`.toLowerCase().includes(needle)),
-    );
-  }, [items, q, visibility]);
-
-  const columns = useMemo<Column<AdminChannelItem>[]>(
-    () => [
-      { key: "name", header: "Channel", className: "font-semibold", cell: (c) => c.name },
-      { key: "slug", header: "Slug", className: "font-mono text-bp-muted", cell: (c) => c.slug },
-      { key: "followers", header: "Followers", cell: (c) => c.followers },
-      { key: "posts", header: "Posts", cell: (c) => c.posts },
-      {
-        key: "flags",
-        header: "Flags",
-        cell: (c) => (
-          <div className="flex flex-wrap gap-1">
-            <StatusBadge label={c.listed ? "Listed" : "Hidden"} tone={c.listed ? "green" : "gray"} />
-            {c.verified ? <StatusBadge label="Verified" tone="green" /> : null}
-          </div>
-        ),
-      },
-      {
-        key: "actions",
-        header: "",
-        align: "right",
-        cell: (c) => (
-          <div className="flex flex-wrap justify-end gap-2">
-            <button type="button" className="bp-btn bp-btn-secondary" disabled={busyId === c.id} onClick={() => void openPosts(c)}>
-              Posts
-            </button>
-            <button type="button" className="bp-btn bp-btn-secondary" disabled={busyId === c.id} onClick={() => void patch(c, { listed: !c.listed })}>
-              {c.listed ? "Unlist" : "List"}
-            </button>
-            <button type="button" className="bp-btn bp-btn-secondary" disabled={busyId === c.id} onClick={() => void patch(c, { verified: !c.verified })}>
-              {c.verified ? "Unverify" : "Verify"}
-            </button>
-            <button type="button" className="bp-btn bp-btn-secondary" disabled={busyId === c.id} onClick={() => void remove(c)}>
-              Delete
-            </button>
-          </div>
-        ),
-      },
-    ],
-    [busyId, openPosts, patch, remove],
-  );
+  };
 
   return (
-    <div className="bp-page">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={channel ? "Edit channel" : "New channel"}
+      description={channel ? `Slug: ${channel.slug}` : "A one-way broadcast that people can follow from the Updates tab."}
+      onSubmit={submit}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" loading={isPending("save")}>{channel ? "Save" : "Create channel"}</Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <Field label="Name" required error={touched ? errors.name : null}>
+          {(a) => <Input {...a} data-autofocus value={form.name} maxLength={80} onChange={(e) => setForm({ ...form, name: e.target.value })} />}
+        </Field>
+        <Field label="Description" hint={`${description.length}/500`} error={errors.description}>
+          {(a) => <Textarea {...a} rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />}
+        </Field>
+        <div className="divide-y divide-line rounded-xl border border-line px-4">
+          <div className="py-3">
+            <SwitchRow label="Verified" description="Shows a verified badge next to the name." checked={form.verified} onChange={(verified) => setForm({ ...form, verified })} />
+          </div>
+          <div className="py-3">
+            <SwitchRow label="Listed" description="Appears in the app's channel directory. Unlisted channels can still be opened by link." checked={form.listed} onChange={(listed) => setForm({ ...form, listed })} />
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function PostsDrawer({ channel, onClose }: { channel: ChannelItem | null; onClose: () => void }) {
+  const posts = useQuery(`channel-posts:${channel?.id}`, (s) => adminApi.channels.posts(channel!.id, s), { enabled: !!channel });
+  const { run, isPending } = useAction();
+  const confirm = useConfirm();
+
+  const hide = async (p: ChannelPost) => {
+    if (!channel) return;
+    const ok = await confirm({ title: "Hide this post?", description: "Followers won't see it anymore. This can't be undone from here.", confirmLabel: "Hide post" });
+    if (!ok) return;
+    const r = await run(p.id, () => adminApi.channels.hidePost(channel.id, p.id), { success: "Post hidden", errorTitle: "Couldn't hide post" });
+    if (r) posts.setData((d) => (d ? { ...d, items: d.items.map((x) => (x.id === p.id ? { ...x, deleted: true } : x)) } : d));
+  };
+
+  const items = posts.data?.items ?? [];
+  return (
+    <Drawer open={!!channel} onClose={onClose} title={channel ? `${channel.name} posts` : "Posts"} description="Latest 50 posts, newest first.">
+      {posts.error ? <Callout tone="danger">{posts.error}</Callout> : null}
+      {!posts.data ? (
+        <div className="space-y-3">{Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-20" />)}</div>
+      ) : items.length ? (
+        <ul className="space-y-3">
+          {items.map((p) => (
+            <li key={p.id} className="rounded-xl border border-line p-4">
+              <p className={p.deleted ? "text-sm text-muted line-through" : "whitespace-pre-wrap text-sm text-ink"}>{p.text}</p>
+              <div className="mt-3 flex items-center gap-3 text-xs text-muted">
+                <span>{fmtDateTime(p.created_at)}</span>
+                <span className="inline-flex items-center gap-1"><Eye size={12} /> {fmtNumber(p.view_count)}</span>
+                {p.deleted ? (
+                  <Badge tone="neutral" className="ml-auto"><EyeOff size={11} /> Hidden</Badge>
+                ) : (
+                  <Button size="sm" variant="danger-soft" className="ml-auto" icon={<EyeOff size={14} />} loading={isPending(p.id)} onClick={() => void hide(p)}>
+                    Hide
+                  </Button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState icon={<Newspaper size={22} />} title="No posts yet" />
+      )}
+    </Drawer>
+  );
+}
+
+export default function ChannelsPage() {
+  const [q, setQ] = useState("");
+  const [modal, setModal] = useState<{ channel: ChannelItem | null } | null>(null);
+  const [postsFor, setPostsFor] = useState<ChannelItem | null>(null);
+  const { run, isPending } = useAction();
+  const confirm = useConfirm();
+  const list = useQuery("channels", (s) => adminApi.channels.list(s));
+  const all = useMemo(() => list.data?.items ?? [], [list.data]);
+  const rows = useMemo(() => {
+    const n = q.trim().toLowerCase();
+    return n ? all.filter((c) => c.name.toLowerCase().includes(n) || c.slug.includes(n)) : all;
+  }, [all, q]);
+
+  const upsert = (c: ChannelItem) =>
+    list.setData((d) => {
+      if (!d) return d;
+      const exists = d.items.some((x) => x.id === c.id);
+      return { ...d, items: exists ? d.items.map((x) => (x.id === c.id ? { ...x, ...c } : x)) : [c, ...d.items] };
+    });
+
+  const toggle = async (c: ChannelItem, field: "verified" | "listed", value: boolean) => {
+    upsert({ ...c, [field]: value });
+    const saved = await run(`${c.id}:${field}`, () => adminApi.channels.update(c.id, { [field]: value }), {
+      success: field === "verified" ? (value ? "Marked verified" : "Verification removed") : value ? "Channel listed" : "Channel unlisted",
+      errorTitle: "Couldn't update channel",
+    });
+    upsert(saved ?? c);
+  };
+
+  const remove = async (c: ChannelItem) => {
+    const ok = await confirm({
+      title: `Delete ${c.name}?`,
+      description: `Its ${fmtNumber(c.posts)} posts and ${fmtNumber(c.followers)} followers are removed for good.`,
+      confirmLabel: "Delete channel",
+    });
+    if (!ok) return;
+    const r = await run(c.id, () => adminApi.channels.remove(c.id), { success: "Channel deleted", errorTitle: "Couldn't delete channel" });
+    if (r) list.setData((d) => (d ? { ...d, items: d.items.filter((x) => x.id !== c.id) } : d));
+  };
+
+  const columns: Column<ChannelItem>[] = [
+    {
+      key: "channel",
+      header: "Channel",
+      cell: (c) => (
+        <span className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand"><Megaphone size={16} /></span>
+          <span className="min-w-0 max-w-[12rem] xl:max-w-[18rem]">
+            <span className="flex items-center gap-1 font-semibold text-ink">
+              <span className="truncate">{c.name}</span>
+              {c.verified ? <BadgeCheck size={15} className="shrink-0 text-brand" aria-label="Verified" /> : null}
+            </span>
+            <span className="block truncate text-xs text-muted">{c.description || `/${c.slug}`}</span>
+          </span>
+        </span>
+      ),
+    },
+    { key: "followers", header: "Followers", align: "right", hideBelow: "sm", className: "tabular-nums", cell: (c) => fmtNumber(c.followers) },
+    {
+      key: "posts",
+      header: "Posts",
+      align: "right",
+      hideBelow: "xl",
+      cell: (c) => (
+        <button type="button" onClick={() => setPostsFor(c)} className="font-semibold tabular-nums text-brand hover:text-brand-strong">
+          {fmtNumber(c.posts)}
+        </button>
+      ),
+    },
+    { key: "verified", header: "Verified", align: "center", hideBelow: "lg", cell: (c) => <Switch size="sm" label={`Verified: ${c.name}`} checked={c.verified} disabled={isPending(`${c.id}:verified`)} onChange={(v) => void toggle(c, "verified", v)} /> },
+    { key: "listed", header: "Listed", align: "center", hideBelow: "lg", cell: (c) => <Switch size="sm" label={`Listed: ${c.name}`} checked={c.listed} disabled={isPending(`${c.id}:listed`)} onChange={(v) => void toggle(c, "listed", v)} /> },
+    { key: "created", header: "Created", hideBelow: "xl", className: "whitespace-nowrap text-muted", cell: (c) => fmtDate(c.created_at) },
+    {
+      key: "actions",
+      header: <span className="sr-only">Actions</span>,
+      align: "right",
+      cell: (c) => (
+        <span className="inline-flex gap-1">
+          <IconButton size="sm" label={`Posts in ${c.name}`} onClick={() => setPostsFor(c)}><Newspaper size={15} /></IconButton>
+          <IconButton size="sm" label={`Edit ${c.name}`} onClick={() => setModal({ channel: c })}><Pencil size={15} /></IconButton>
+          <IconButton size="sm" tone="danger" label={`Delete ${c.name}`} disabled={isPending(c.id)} onClick={() => void remove(c)}><Trash2 size={15} /></IconButton>
+        </span>
+      ),
+    },
+  ];
+
+  return (
+    <>
       <PageHeader
         title="Channels"
-        description="Moderate broadcast channels — unlist, verify, hide posts, or delete."
-        actions={<RefreshButton onClick={() => void reload()} />}
+        count={list.data ? all.length : undefined}
+        description="Broadcast channels people follow in the app's Updates tab."
+        actions={<Button icon={<Plus size={16} />} onClick={() => setModal({ channel: null })}>New channel</Button>}
       />
-
-      <div className="bp-card mb-4 flex flex-wrap items-end gap-3 p-4">
-        <label className="grow text-sm font-semibold">
-          New channel
-          <input className="bp-input mt-1.5" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name" />
-        </label>
-        <button type="button" className="bp-btn" disabled={busyId === "create" || !newName.trim()} onClick={() => void create()}>
-          Create
-        </button>
-      </div>
-
-      <FilterBar
-        search={{ value: q, onChange: setQ, onSubmit: () => {}, placeholder: "Search channel name or slug" }}
-        segments={{
-          value: visibility,
-          onChange: setVisibility,
-          options: [
-            { value: "all", label: "All" },
-            { value: "listed", label: "Listed" },
-            { value: "hidden", label: "Hidden" },
-          ],
-        }}
-      />
-      <Alert>{actionError ?? error}</Alert>
-      <DataTable
-        columns={columns}
-        rows={rows}
-        getKey={(c) => c.id}
-        loading={loading}
-        empty="No channels found."
-        selectedKey={selected?.id ?? null}
-      />
-
-      {selected ? (
-        <div className="bp-card mt-4 overflow-hidden">
-          <div className="flex items-center justify-between border-b border-bp-line px-4 py-3">
-            <h2 className="text-sm font-semibold">Posts · {selected.name}</h2>
-            <button
-              type="button"
-              className="bp-btn bp-btn-secondary"
-              onClick={() => {
-                setSelected(null);
-                setPosts([]);
-              }}
-            >
-              Close
-            </button>
-          </div>
-          {postsLoading ? (
-            <p className="px-4 py-6 text-sm text-bp-muted">Loading…</p>
-          ) : posts.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-bp-muted">No posts</p>
-          ) : (
-            <ul className="divide-y divide-bp-line/70">
-              {posts.map((p) => (
-                <li key={p.id} className="flex items-start justify-between gap-3 px-4 py-3 text-sm">
-                  <div>
-                    <p className={p.deleted ? "text-bp-muted line-through" : ""}>{p.text}</p>
-                    <p className="mt-1 text-xs text-bp-muted">
-                      {p.view_count} views · {p.created_at}
-                      {p.deleted ? " · hidden" : ""}
-                    </p>
-                  </div>
-                  {!p.deleted ? (
-                    <button type="button" className="bp-btn bp-btn-secondary shrink-0" onClick={() => void hidePost(p.id)}>
-                      Hide
-                    </button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : null}
-    </div>
+      {list.error ? <Callout tone="danger" className="mb-4">{list.error}</Callout> : null}
+      <Card>
+        <CardToolbar>
+          <SearchInput value={q} onChange={setQ} placeholder="Search channels" className="md:max-w-xs" aria-label="Search channels" />
+        </CardToolbar>
+        <DataTable
+          label="Channels"
+          columns={columns}
+          rows={list.data ? rows : undefined}
+          loading={list.loading}
+          getKey={(c) => c.id}
+          resetKey={q}
+          empty={<EmptyState icon={<Megaphone size={22} />} title={q ? "No channels match" : "No channels yet"} action={q ? undefined : <Button size="sm" icon={<Plus size={14} />} onClick={() => setModal({ channel: null })}>New channel</Button>} />}
+        />
+      </Card>
+      <ChannelModal open={!!modal} channel={modal?.channel ?? null} onClose={() => setModal(null)} onSaved={upsert} />
+      <PostsDrawer channel={postsFor} onClose={() => setPostsFor(null)} />
+    </>
   );
 }

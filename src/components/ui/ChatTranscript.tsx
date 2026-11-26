@@ -1,80 +1,88 @@
-import { useEffect, useRef } from "react";
-import { fmtTime } from "@/lib/format";
-import type { AdminConversationDetail } from "@/lib/api";
+"use client";
 
-type Msg = AdminConversationDetail["messages"][number];
+import { useEffect, useMemo, useRef } from "react";
+import { Ban, CornerUpRight, Paperclip } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { fmtTime } from "@/lib/format";
+import type { ConversationMessage } from "@/lib/api";
 
 type Props = {
-  messages: Msg[];
-  /** Whose point of view: their messages sit on the right (like the app). */
+  messages: ConversationMessage[];
+  /** Whose point of view: their messages sit on the right, like in the app. */
   perspectiveId: string | null;
   isGroup: boolean;
 };
 
-/** Receipt ticks for outgoing messages. */
-const TICKS: Record<string, { label: string; className: string }> = {
-  sent: { label: "✓", className: "" },
-  delivered: { label: "✓✓", className: "" },
-  read: { label: "✓✓", className: "text-[#53bdeb]" },
-};
-
-const dayLabel = (iso: string) =>
-  new Date(iso).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
-
+const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 const dayKey = (iso: string) => new Date(iso).toDateString();
 
-function body(m: Msg): string {
-  if (m.deleted_for_everyone_at) return "🚫 This message was deleted";
-  if (m.text) return m.text;
-  if (m.has_attachment) return `📎 ${m.attachment_name ?? m.type}`;
-  return `[${m.type}]`;
+function Ticks({ status }: { status: string }) {
+  if (status !== "sent" && status !== "delivered" && status !== "read") return null;
+  return (
+    <span aria-label={status} className={cn("font-bold tracking-tighter", status === "read" && "text-[#53bdeb]")}>
+      {status === "sent" ? "✓" : "✓✓"}
+    </span>
+  );
 }
 
-/** WhatsApp-style transcript: incoming left, outgoing right, day dividers, receipts. */
+/** Messenger-style transcript: incoming left, outgoing right, day dividers, receipts. */
 export function ChatTranscript({ messages, perspectiveId, isGroup }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const sorted = useMemo(() => [...messages].sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at)), [messages]);
 
   useEffect(() => {
     const el = ref.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [messages, perspectiveId]);
-
-  const sorted = [...messages].sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at));
+  }, [sorted, perspectiveId]);
 
   return (
     <div
       ref={ref}
-      className="bp-chat"
+      className="chat"
       onScroll={(e) => {
         const el = e.currentTarget;
         stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
       }}
     >
-      {sorted.length === 0 ? <div className="py-6 text-center text-sm text-bp-muted">No messages</div> : null}
+      {sorted.length === 0 ? <div className="py-10 text-center text-[13px] text-muted">No messages in this conversation yet.</div> : null}
       {sorted.map((m, i) => {
         const prev = sorted[i - 1];
         const newDay = !prev || dayKey(prev.created_at) !== dayKey(m.created_at);
         const mine = perspectiveId !== null && m.sender_id === perspectiveId;
         const firstOfRun = newDay || prev.sender_id !== m.sender_id;
-        const tick = mine ? TICKS[m.status] : undefined;
         const deleted = !!m.deleted_for_everyone_at;
         return (
           <div key={m.id} className="contents">
-            {newDay ? <div className="bp-chat-day">{dayLabel(m.created_at)}</div> : null}
-            <div
-              className={`bp-bubble ${mine ? "bp-bubble--out" : "bp-bubble--in"} ${firstOfRun ? "bp-bubble--tail" : ""} ${
-                firstOfRun && !newDay ? "bp-bubble--gap" : ""
-              } ${deleted ? "italic text-bp-muted" : ""}`}
-            >
-              {isGroup && !mine && firstOfRun ? <div className="mb-0.5 text-[12px] font-bold text-bp-green">{m.sender_name}</div> : null}
-              {m.forwarded ? <div className="mb-0.5 text-[11px] italic text-bp-muted">↪ Forwarded</div> : null}
-              <div className="whitespace-pre-wrap text-bp-ink">{body(m)}</div>
-              <div className="bp-bubble-meta">
-                {m.view_once ? <span>view-once</span> : null}
+            {newDay ? <div className="chat-day">{dayFmt.format(new Date(m.created_at))}</div> : null}
+            <div className={cn("bubble", mine ? "bubble--out" : "bubble--in", firstOfRun && "bubble--tail", firstOfRun && !newDay && "bubble--gap")}>
+              {isGroup && !mine && firstOfRun ? <div className="mb-0.5 text-xs font-bold text-brand">{m.sender_name}</div> : null}
+              {m.forwarded ? (
+                <div className="mb-0.5 flex items-center gap-1 text-[11px] italic text-muted">
+                  <CornerUpRight size={11} /> Forwarded
+                </div>
+              ) : null}
+              {deleted ? (
+                <div className="flex items-center gap-1.5 italic text-muted">
+                  <Ban size={13} /> This message was deleted
+                </div>
+              ) : (
+                <>
+                  {m.has_attachment ? (
+                    <div className="mb-0.5 flex items-center gap-1.5 text-ink-soft">
+                      <Paperclip size={13} className="text-muted" />
+                      <span className="truncate">{m.attachment_name ?? m.attachment_mime ?? m.type}</span>
+                    </div>
+                  ) : null}
+                  {m.text ? <div className="whitespace-pre-wrap break-words text-ink">{m.text}</div> : null}
+                  {!m.text && !m.has_attachment ? <div className="text-muted">[{m.type}]</div> : null}
+                </>
+              )}
+              <div className="bubble-meta">
+                {m.view_once ? <span>view once</span> : null}
                 {m.edited_at ? <span>edited</span> : null}
                 <span>{fmtTime(m.created_at)}</span>
-                {tick ? <span className={`font-bold tracking-tighter ${tick.className}`}>{tick.label}</span> : null}
+                {mine ? <Ticks status={m.status} /> : null}
               </div>
             </div>
           </div>

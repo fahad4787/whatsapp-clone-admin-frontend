@@ -1,63 +1,37 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
-import Link from "next/link";
+import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { PanelLeft, Smartphone, X } from "lucide-react";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { AivoraLogo } from "@/components/brand";
+import { Loader2, X } from "lucide-react";
+import { IconButton } from "@/components/ui";
 import { STORAGE_KEYS } from "@/config/constants";
-import { maybeRefreshAdminSession } from "@/lib/api";
+import { getAdminToken, maybeRefreshAdminSession } from "@/lib/api";
+import { cn } from "@/lib/cn";
+import { Sidebar } from "./Sidebar";
+import { Topbar } from "./Topbar";
 
-type ShellCtx = {
-  collapsed: boolean;
-  mobileOpen: boolean;
-  toggleCollapsed: () => void;
-  setMobileOpen: (open: boolean) => void;
-  widthReady: boolean;
-};
-
-const Ctx = createContext<ShellCtx | null>(null);
-
-export function useAdminShell() {
-  const ctx = useContext(Ctx);
-  if (!ctx) throw new Error("useAdminShell must be used inside AdminShell");
-  return ctx;
-}
-
-function applySidebarWidth(collapsed: boolean) {
-  document.documentElement.style.setProperty("--sidebar-w", collapsed ? "4.75rem" : "16rem");
+function readCollapsed() {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.sidebarCollapsed) === "1";
+  } catch {
+    return false;
+  }
 }
 
 export function AdminShell({ children }: { children: ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [widthReady, setWidthReady] = useState(false);
-  const [authed, setAuthed] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const [authed, setAuthed] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Guard: no token → login (remembering where we were). Then keep the session alive while the tab is in use.
+  // Guard: no token → login (remember where we were). Runs once; a later 401 is handled by the API client.
   useEffect(() => {
-    let token: string | null = null;
-    try {
-      token = localStorage.getItem(STORAGE_KEYS.adminToken);
-    } catch {
-      /* ignore */
-    }
-    if (!token) {
-      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+    if (!getAdminToken()) {
+      router.replace(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
       return;
     }
+    setCollapsed(readCollapsed());
     setAuthed(true);
     void maybeRefreshAdminSession();
     const tick = () => {
@@ -69,115 +43,63 @@ export function AdminShell({ children }: { children: ReactNode }) {
       window.clearInterval(id);
       window.removeEventListener("focus", tick);
     };
-  }, [router, pathname]);
+  }, [router]);
 
-  useLayoutEffect(() => {
-    let next = false;
-    try {
-      next = localStorage.getItem(STORAGE_KEYS.sidebarCollapsed) === "1";
-    } catch {
-      /* ignore */
-    }
-    setCollapsed(next);
-    applySidebarWidth(next);
-    setWidthReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!widthReady) return;
-    applySidebarWidth(collapsed);
-    try {
-      localStorage.setItem(STORAGE_KEYS.sidebarCollapsed, collapsed ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  }, [collapsed, widthReady]);
+  // Close the mobile drawer on navigation.
+  useEffect(() => setMobileOpen(false), [pathname]);
 
   useEffect(() => {
     if (!mobileOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMobileOpen(false);
-    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMobileOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [mobileOpen]);
 
-  const toggleCollapsed = useCallback(() => {
-    if (window.matchMedia("(max-width: 1023px)").matches) {
-      setMobileOpen((v) => !v);
-      return;
-    }
-    setCollapsed((v) => !v);
-  }, []);
+  const toggleCollapsed = () =>
+    setCollapsed((v) => {
+      try {
+        localStorage.setItem(STORAGE_KEYS.sidebarCollapsed, v ? "0" : "1");
+      } catch {
+        /* storage unavailable */
+      }
+      return !v;
+    });
 
-  const value = useMemo(
-    () => ({ collapsed, mobileOpen, toggleCollapsed, setMobileOpen, widthReady }),
-    [collapsed, mobileOpen, toggleCollapsed, widthReady],
-  );
-
-  if (!authed) return <div className="min-h-screen" aria-busy="true" />;
+  if (!authed) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-muted" aria-busy="true">
+        <Loader2 className="animate-spin" size={22} />
+      </div>
+    );
+  }
 
   return (
-    <Ctx.Provider value={value}>
-      <div className="flex min-h-screen">
-        <div className="hidden lg:block">
-          <Sidebar />
-        </div>
+    <div className="flex min-h-screen">
+      <aside
+        className={cn(
+          "sticky top-0 hidden h-screen shrink-0 border-r border-line bg-surface transition-[width] duration-200 ease-out lg:block",
+          collapsed ? "w-[4.5rem]" : "w-[var(--sidebar-w)]",
+        )}
+      >
+        <Sidebar collapsed={collapsed} />
+      </aside>
 
-        {mobileOpen ? (
-          <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
-            <button
-              type="button"
-              className="absolute inset-0 bg-[#0c1612]/35 backdrop-blur-[3px]"
-              aria-label="Close menu"
-              onClick={() => setMobileOpen(false)}
-            />
-            <div className="absolute inset-y-0 left-0 flex w-[min(17.5rem,90vw)] flex-col bg-white shadow-2xl">
-              <div className="flex items-center justify-end border-b border-bp-border px-2 py-2">
-                <button
-                  type="button"
-                  className="bp-icon-btn"
-                  aria-label="Close sidebar"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  <X size={18} />
-                </button>
-              </div>
-              <Sidebar forceExpanded onNavigate={() => setMobileOpen(false)} />
-            </div>
+      {mobileOpen ? (
+        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
+          <div className="absolute inset-0 animate-fade-in bg-ink/35 backdrop-blur-[2px]" onClick={() => setMobileOpen(false)} aria-hidden />
+          <div className="absolute inset-y-0 left-0 w-[min(17rem,85vw)] animate-slide-in-left bg-surface shadow-pop">
+            <IconButton label="Close menu" size="sm" onClick={() => setMobileOpen(false)} className="absolute right-3 top-4 z-10">
+              <X size={17} />
+            </IconButton>
+            <Sidebar onNavigate={() => setMobileOpen(false)} />
           </div>
-        ) : null}
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-bp-border/70 bg-white/80 px-3 backdrop-blur-xl sm:px-4">
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                className="bp-icon-btn"
-                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                aria-pressed={collapsed}
-                onClick={toggleCollapsed}
-              >
-                <PanelLeft size={18} />
-              </button>
-              <div className="hidden items-center gap-2 sm:flex">
-                <AivoraLogo size={22} animated={false} />
-                <div className="text-[13px]">
-                  <span className="font-semibold text-bp-ink">Admin</span>
-                  <span className="mx-1.5 text-bp-border">/</span>
-                  <span className="text-bp-muted">Console</span>
-                </div>
-              </div>
-            </div>
-            <Link href="/android" className="bp-icon-btn" aria-label="Android app" title="Android app">
-              <Smartphone size={18} />
-            </Link>
-          </header>
-          <main className="mx-auto w-full max-w-[1380px] flex-1 overflow-auto px-3 py-4 sm:px-4 sm:py-5 md:px-5 md:py-6">
-            {children}
-          </main>
         </div>
+      ) : null}
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Topbar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} onOpenMobile={() => setMobileOpen(true)} />
+        <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
       </div>
-    </Ctx.Provider>
+    </div>
   );
 }

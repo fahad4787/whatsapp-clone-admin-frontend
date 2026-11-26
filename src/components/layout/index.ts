@@ -1,2 +1,1 @@
-export { AdminShell, useAdminShell } from "./AdminShell";
-export { Sidebar } from "./Sidebar";
+export { AdminShell } from "./AdminShell";

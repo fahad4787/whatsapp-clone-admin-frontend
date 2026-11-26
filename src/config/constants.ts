@@ -1,17 +1,9 @@
-/** App-wide constants (no secrets). Swap when wiring real backend / CDN. */
-export const APP = {
-  name: "Aivora",
-  adminLabel: "Admin console",
-  androidVersion: "1.12.13",
-  androidSize: "28.2 MB",
-  /** Dummy install URL for local UI — replace with real CDN later. */
-  downloadUrl: "https://download.aivora.dev/android/aivora-1.12.13.apk",
-} as const;
-
+/** App-wide constants (no secrets). */
 export const STORAGE_KEYS = {
-  adminSession: "av-admin-session",
   adminToken: "av-admin-token",
   adminEmail: "av-admin-email",
   sidebarCollapsed: "av-admin-sidebar-collapsed",
-  mockStore: "av-admin-mock-store",
 } as const;
+
+/** E.164 phone number, as the backend validates it. */
+export const PHONE_RE = /^\+\d{7,15}$/;

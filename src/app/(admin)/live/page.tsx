@@ -1,134 +1,87 @@
 "use client";
 
 import { useState } from "react";
-import { PageHeader, StatusBadge } from "@/components/ui";
-import { STORAGE_KEYS } from "@/config/constants";
+import { PhoneOff, Radio } from "lucide-react";
+import { CallPeople, CallStatusBadge, CallType } from "@/components/calls/CallCells";
+import { Badge, Button, Card, DataTable, Elapsed, EmptyState, PageHeader, StatCard, useConfirm, type Column } from "@/components/ui";
+import { useAction } from "@/hooks/useAction";
 import { useAdminCallsStream } from "@/hooks/useAdminCallsStream";
-import { endAdminCall, type AdminCallItem } from "@/lib/api";
-
-function formatWhen(iso: string) {
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
-}
+import { adminApi, type CallItem, type CallsSnapshot } from "@/lib/api";
+import { fmtNumber, fmtTime } from "@/lib/format";
 
 export default function LiveCallsPage() {
-  const [items, setItems] = useState<AdminCallItem[]>([]);
-  const [live, setLive] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [snap, setSnap] = useState<CallsSnapshot | null>(null);
+  const [callsToday, setCallsToday] = useState<number | null>(null);
+  const { run, isPending } = useAction();
+  const confirm = useConfirm();
 
-  useAdminCallsStream((snap) => {
-    setItems(snap.items);
-    setLive(true);
-    setError(null);
+  useAdminCallsStream((s) => {
+    setSnap(s);
+    // The polling fallback doesn't know today's total (-1); keep the last real number.
+    if (s.calls_today >= 0) setCallsToday(s.calls_today);
   });
 
-  async function forceEnd(call: AdminCallItem) {
-    if (!window.confirm(`Force-end this ${call.media} call?`)) return;
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-    if (!token) return;
-    setBusyId(call.id);
-    try {
-      await endAdminCall(token, call.id);
-      // Optimistic; SSE will confirm.
-      setItems((list) => list.filter((c) => c.id !== call.id));
-    } catch {
-      setError("Force-end failed");
-    } finally {
-      setBusyId(null);
-    }
-  }
+  const items = snap?.items ?? [];
+  const ringing = items.filter((c) => c.status === "ringing").length;
+
+  const forceEnd = async (c: CallItem) => {
+    const ok = await confirm({
+      title: "End this call for everyone?",
+      description: `The ${c.media} call started by ${c.initiator.display_name || c.initiator.phone} is closed for all participants right away.`,
+      confirmLabel: "End call",
+    });
+    if (!ok) return;
+    const r = await run(c.id, () => adminApi.calls.end(c.id), { success: "Call ended", errorTitle: "Couldn't end the call" });
+    if (r) setSnap((s) => (s ? { ...s, items: s.items.filter((x) => x.id !== c.id) } : s));
+  };
+
+  const columns: Column<CallItem>[] = [
+    { key: "who", header: "Caller", cell: (c) => <CallPeople c={c} /> },
+    { key: "type", header: "Type", hideBelow: "sm", cell: (c) => <CallType c={c} /> },
+    { key: "status", header: "Status", cell: (c) => <CallStatusBadge c={c} live /> },
+    { key: "started", header: "Started", hideBelow: "md", className: "whitespace-nowrap text-muted", cell: (c) => fmtTime(c.started_at) },
+    {
+      key: "duration",
+      header: "Duration",
+      align: "right",
+      className: "tabular-nums font-medium text-ink",
+      cell: (c) => (c.answered_at ? <Elapsed since={c.answered_at} /> : <span className="whitespace-nowrap text-muted">Ringing <Elapsed since={c.started_at} /></span>),
+    },
+    {
+      key: "actions",
+      header: <span className="sr-only">Actions</span>,
+      align: "right",
+      cell: (c) => (
+        <Button size="sm" variant="danger-soft" icon={<PhoneOff size={14} />} loading={isPending(c.id)} onClick={() => void forceEnd(c)}>
+          End
+        </Button>
+      ),
+    },
+  ];
 
   return (
-    <div className="bp-page">
+    <>
       <PageHeader
         title="Live calls"
-        description="Ringing or connected rooms — updates automatically when calls start or end."
-        actions={
-          <span className="text-xs font-medium text-bp-muted">
-            {live ? (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="inline-block size-2 rounded-full bg-bp-green animate-pulse" />
-                Live
-              </span>
-            ) : (
-              "Connecting…"
-            )}
-          </span>
-        }
+        description="Updates the moment a call starts ringing, connects or ends."
+        actions={snap ? <Badge tone="success" dot pulse>Live</Badge> : <Badge tone="neutral">Connecting…</Badge>}
       />
-
-      {error ? (
-        <div className="bp-alert">
-          {error}
-        </div>
-      ) : null}
-
-      <div className="bp-card overflow-hidden">
-        <table className="bp-table">
-          <thead>
-            <tr>
-              <th>Started</th>
-              <th>Status</th>
-              <th>Media</th>
-              <th>Kind</th>
-              <th>Participants</th>
-              <th>Room</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {!live && items.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="bp-empty">
-                  Connecting to live feed…
-                </td>
-              </tr>
-            ) : null}
-            {live && items.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="bp-empty">
-                  No calls in progress. When someone places a call, it shows up here.
-                </td>
-              </tr>
-            ) : null}
-            {items.map((c) => (
-              <tr key={c.id}>
-                <td className="whitespace-nowrap">{formatWhen(c.started_at)}</td>
-                <td>
-                  <StatusBadge
-                    label={c.status}
-                    tone={c.status === "active" ? "green" : "yellow"}
-                  />
-                </td>
-                <td className="capitalize">{c.media}</td>
-                <td className="capitalize">{c.kind}</td>
-                <td>
-                  <span className="text-bp-green">
-                    {c.conversation_title
-                      ? `${c.conversation_title} · ${c.participants_label}`
-                      : c.participants_label}
-                  </span>
-                </td>
-                <td className="bp-mono text-xs">{c.room_name}</td>
-                <td className="text-right">
-                  <button
-                    type="button"
-                    className="bp-btn bp-btn-secondary text-xs"
-                    disabled={busyId === c.id}
-                    onClick={() => void forceEnd(c)}
-                  >
-                    {busyId === c.id ? "Ending…" : "Force end"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
+        <StatCard label="Active now" value={fmtNumber(snap?.calls_active ?? 0)} loading={!snap} hint="Ringing or in progress" />
+        <StatCard label="Ringing" value={fmtNumber(ringing)} loading={!snap} hint="Not answered yet" accent="warning" />
+        <StatCard label="Calls today" value={callsToday == null ? "—" : fmtNumber(callsToday)} loading={!snap} hint="Since midnight" accent="info" />
       </div>
-    </div>
+      <Card>
+        <DataTable
+          label="Live calls"
+          columns={columns}
+          rows={snap ? items : undefined}
+          loading={!snap}
+          getKey={(c) => c.id}
+          pageSize={0}
+          empty={<EmptyState icon={<Radio size={22} />} title="No calls right now" description="Leave this page open; calls appear here as soon as they start." />}
+        />
+      </Card>
+    </>
   );
 }

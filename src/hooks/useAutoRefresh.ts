@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
  * once more when the tab regains focus. Never overlaps itself, so a slow API
  * (cold start) can't pile up requests.
  */
+/** Pass `ms <= 0` to turn it off. */
 export function useAutoRefresh(load: () => Promise<unknown> | void, ms = 15_000) {
   const ref = useRef(load);
   useEffect(() => {
@@ -12,6 +13,7 @@ export function useAutoRefresh(load: () => Promise<unknown> | void, ms = 15_000)
   });
 
   useEffect(() => {
+    if (ms <= 0) return; // refresh disabled
     let busy = false;
     let last = Date.now();
     const run = async () => {

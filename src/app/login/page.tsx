@@ -1,252 +1,231 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Copy, Download, Eye, EyeOff, Lock, ShieldCheck, Smartphone } from "lucide-react";
-import { Button } from "@/components/ui";
-import { AivoraBrand, AivoraLogo } from "@/components/brand";
-import { APP, STORAGE_KEYS } from "@/config/constants";
-import { adminLogin, adminTotpLogin, saveAdminToken, type AdminLoginResult } from "@/lib/api";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, Eye, EyeOff, KeyRound, Lock, ShieldCheck, Users } from "lucide-react";
+import { AivoraBrand } from "@/components/brand";
+import { Button, Callout, CopyButton, Field, Input } from "@/components/ui";
+import { authApi, getAdminToken, saveAdminSession, type LoginResult, type TotpSetup } from "@/lib/api";
+import { errorMessage } from "@/lib/errors";
 
-export default function LoginPage() {
+type Step =
+  | { kind: "credentials" }
+  | { kind: "code"; ticket: string }
+  | { kind: "enroll"; ticket: string; setup: TotpSetup | null };
+
+/** Only same-site paths; never bounce back to /login. */
+function safeNext(raw: string | null): string {
+  return raw && raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/login") ? raw : "/";
+}
+
+const FEATURES = [
+  { icon: Users, text: "Users, chats and reports in one place" },
+  { icon: ShieldCheck, text: "Two-factor sign-in and IP allow-list" },
+  { icon: Lock, text: "Every admin action is audited" },
+];
+
+function CodeInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <Field label="6-digit code" hint="From Google Authenticator, 1Password or a similar app.">
+      {(a) => (
+        <Input
+          {...a}
+          autoFocus
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={6}
+          placeholder="000000"
+          className="h-12 text-center font-mono text-xl tracking-[0.5em]"
+          value={value}
+          onChange={(e) => onChange(e.target.value.replace(/\D/g, ""))}
+        />
+      )}
+    </Field>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@aivora.dev");
+  const params = useSearchParams();
+  const next = safeNext(params.get("next"));
+  const expired = params.get("expired") === "1";
+
+  const [step, setStep] = useState<Step>({ kind: "credentials" });
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [ticket, setTicket] = useState<string | null>(null);
-  const [code, setCode] = useState("");
-
-  function nextPath() {
-    const n = new URLSearchParams(window.location.search).get("next");
-    return n && n.startsWith("/") && !n.startsWith("//") && n !== "/login" ? n : "/";
-  }
-
+  // Already signed in (and not bounced here by an expired session) → straight in.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("expired")) {
-      setError("Your session expired — please sign in again.");
-    } else if (localStorage.getItem(STORAGE_KEYS.adminToken)) {
-      router.replace(nextPath());
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
-  }, []);
+    if (!expired && getAdminToken()) router.replace(next);
+  }, [expired, next, router]);
 
-  function finish(result: AdminLoginResult) {
-    if (result.status === "ok") {
-      saveAdminToken(result.access);
-      try {
-        if (email.trim()) localStorage.setItem(STORAGE_KEYS.adminEmail, email.trim());
-      } catch {
-        /* ignore */
-      }
-      router.replace(nextPath());
-      return;
-    }
-    if (result.status === "totp_required") {
-      setTicket(result.ticket);
-      setBusy(false);
-      return;
-    }
-    setError("This account must enrol in 2FA — finish enrolment from the Aivora admin first.");
-    setBusy(false);
-  }
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
+  const restart = () => {
+    setStep({ kind: "credentials" });
+    setCode("");
     setError(null);
+  };
+
+  const handle = async (result: LoginResult) => {
+    if (result.status === "ok") {
+      saveAdminSession(result.access, result.admin.email);
+      router.replace(next);
+      return;
+    }
+    setCode("");
+    if (result.status === "totp_required") {
+      setStep({ kind: "code", ticket: result.ticket });
+      return;
+    }
+    setStep({ kind: "enroll", ticket: result.ticket, setup: null });
+    const setup = await authApi.setupTotp(result.ticket);
+    setStep({ kind: "enroll", ticket: result.ticket, setup });
+  };
+
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setError(null);
+    if (step.kind !== "credentials" && code.length !== 6) {
+      setError("Enter the 6-digit code.");
+      return;
+    }
+    setBusy(true);
     try {
-      finish(ticket ? await adminTotpLogin(ticket, code.trim()) : await adminLogin(email.trim(), password));
+      if (step.kind === "credentials") await handle(await authApi.login(email.trim(), password));
+      else if (step.kind === "code") await handle(await authApi.verifyTotp(step.ticket, code));
+      else await handle(await authApi.confirmTotp(step.ticket, code));
     } catch (err) {
-      const m = err instanceof Error ? err.message : "";
-      setError(
-        m === "ip_blocked"
-          ? "This IP address isn't allowed to access the console."
-          : m === "login_locked"
-            ? "Too many attempts — try again in a few minutes."
-            : m === "invalid_code"
-              ? "That code is wrong or expired."
-              : ticket
-                ? "Verification failed — start again."
-                : m === "invalid_credentials"
-                  ? "Invalid email or password"
-                  : "Can't reach the server — it may be waking up. Try again in a few seconds.",
-      );
+      setError(errorMessage(err, step.kind === "credentials" ? "Couldn't sign in. Try again." : "That code didn't work. Try again."));
+      if (step.kind !== "credentials") setCode("");
+    } finally {
       setBusy(false);
     }
-  }
+  };
 
-  async function copyLink() {
-    try {
-      await navigator.clipboard.writeText(APP.downloadUrl);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
-      /* ignore */
-    }
-  }
+  const heading =
+    step.kind === "credentials"
+      ? { title: "Sign in", text: "Use your admin email and password." }
+      : step.kind === "code"
+        ? { title: "Two-factor check", text: "Enter the code from your authenticator app." }
+        : { title: "Set up two-factor", text: "Your account needs an authenticator app before you can continue." };
 
   return (
-    <main className="relative flex min-h-screen overflow-hidden">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(18,154,85,0.14),_transparent_50%),radial-gradient(ellipse_at_bottom_right,_rgba(12,22,18,0.04),_transparent_45%)]"
-      />
+    <form onSubmit={onSubmit} noValidate className="animate-pop-in rounded-3xl border border-line bg-surface p-7 shadow-pop sm:p-9">
+      {step.kind !== "credentials" ? (
+        <button type="button" onClick={restart} className="mb-5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted hover:text-ink">
+          <ArrowLeft size={15} /> Back
+        </button>
+      ) : null}
+      <div className="mb-7">
+        {step.kind !== "credentials" ? (
+          <span className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-soft text-brand"><KeyRound size={20} /></span>
+        ) : null}
+        <h1 className="text-[1.6rem] font-extrabold tracking-tight text-ink">{heading.title}</h1>
+        <p className="mt-1.5 text-sm text-muted">{heading.text}</p>
+      </div>
 
-      {/* Brand panel */}
-      <aside className="relative hidden w-[44%] max-w-xl flex-col justify-between overflow-hidden bg-[#0c1612] px-10 py-12 text-white lg:flex xl:px-14">
-        <div
-          aria-hidden
-          className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_20%,_rgba(29,184,102,0.35),_transparent_55%),radial-gradient(ellipse_at_80%_80%,_rgba(18,154,85,0.18),_transparent_50%)]"
-        />
-        <div className="relative">
-          <AivoraBrand size={44} subtitle="Admin console" inverted />
+      {expired && step.kind === "credentials" && !error ? (
+        <Callout tone="warning" className="mb-5">Your session ended. Sign in again to continue.</Callout>
+      ) : null}
+
+      {step.kind === "credentials" ? (
+        <div className="flex flex-col gap-4">
+          <Field label="Email">
+            {(a) => (
+              <Input {...a} type="email" autoFocus autoComplete="username" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            )}
+          </Field>
+          <Field label="Password">
+            {(a) => (
+              <Input
+                {...a}
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                trailing={
+                  <button
+                    type="button"
+                    className="rounded-md p-1 text-muted hover:text-ink"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    onClick={() => setShowPassword((v) => !v)}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                }
+              />
+            )}
+          </Field>
         </div>
-
-        <div className="relative my-10 flex justify-start" aria-hidden>
-          <AivoraLogo size={112} />
+      ) : step.kind === "code" ? (
+        <CodeInput value={code} onChange={setCode} />
+      ) : (
+        <div className="flex flex-col gap-5">
+          <ol className="space-y-2 text-sm text-ink-soft">
+            <li><b className="text-ink">1.</b> Open your authenticator app and add an account.</li>
+            <li><b className="text-ink">2.</b> Enter the setup key below, or open the link on this device.</li>
+            <li><b className="text-ink">3.</b> Type the 6-digit code it shows.</li>
+          </ol>
+          <div className="rounded-2xl border border-line bg-surface-muted p-4">
+            <p className="text-xs font-semibold text-muted">Setup key</p>
+            {step.setup ? (
+              <>
+                <div className="mt-1 flex items-center gap-2">
+                  <code className="min-w-0 flex-1 break-all font-mono text-sm font-semibold text-ink">{step.setup.secret}</code>
+                  <CopyButton value={step.setup.secret} label="Copy setup key" />
+                </div>
+                <a href={step.setup.otpauth_uri} className="mt-2 inline-block text-[13px] font-semibold text-brand hover:text-brand-strong">
+                  Open in authenticator app
+                </a>
+              </>
+            ) : (
+              <p className="mt-1 text-sm text-muted">Generating…</p>
+            )}
+          </div>
+          <CodeInput value={code} onChange={setCode} />
         </div>
+      )}
 
+      {error ? <Callout tone="danger" className="mt-5">{error}</Callout> : null}
+
+      <Button type="submit" className="mt-7 h-11 w-full" loading={busy} disabled={step.kind === "enroll" && !step.setup}>
+        {step.kind === "credentials" ? "Sign in" : step.kind === "code" ? "Verify" : "Turn on two-factor"}
+      </Button>
+    </form>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <main className="flex min-h-dvh bg-canvas">
+      <aside className="relative hidden w-[42%] max-w-xl flex-col justify-between overflow-hidden bg-[#0c1612] p-12 text-white lg:flex">
+        <div aria-hidden className="absolute inset-0 bg-[radial-gradient(ellipse_at_25%_15%,rgba(29,184,102,0.32),transparent_55%),radial-gradient(ellipse_at_85%_90%,rgba(18,154,85,0.18),transparent_50%)]" />
+        <div className="relative"><AivoraBrand size={42} subtitle="Admin console" inverted /></div>
         <div className="relative max-w-md">
-          <p className="text-[11px] font-bold tracking-[0.14em] text-[#6fcf97] uppercase">Secure access</p>
-          <h1 className="mt-3 text-[2.15rem] leading-[1.15] font-extrabold tracking-tight">
-            Operate the network with confidence.
-          </h1>
-          <p className="mt-4 text-[15px] leading-relaxed text-white/65">
-            Manage users, OTP flows, calls, and app releases from one calm control room built for your team.
-          </p>
+          <h2 className="text-[2.1rem] font-extrabold leading-[1.15] tracking-tight">Run Aivora from one calm place.</h2>
           <ul className="mt-8 space-y-3.5 text-sm text-white/75">
-            {[
-              { icon: ShieldCheck, text: "Role-based admin access" },
-              { icon: Lock, text: "Session-aware console" },
-              { icon: Smartphone, text: "Android builds & install links" },
-            ].map(({ icon: Icon, text }) => (
+            {FEATURES.map(({ icon: Icon, text }) => (
               <li key={text} className="flex items-center gap-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-md bg-white/8 ring-1 ring-white/10">
-                  <Icon size={15} className="text-[#6fcf97]" />
-                </span>
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10"><Icon size={15} className="text-[#6fcf97]" /></span>
                 {text}
               </li>
             ))}
           </ul>
         </div>
-
-        <p className="relative text-xs text-white/40">Secure admin console</p>
+        <p className="relative text-xs text-white/40">Authorised staff only.</p>
       </aside>
-
-      {/* Auth column */}
       <div className="relative flex flex-1 items-center justify-center px-4 py-10 sm:px-8">
-        <div className="bp-page w-full max-w-[420px]">
-          <div className="mb-7 lg:hidden">
-            <AivoraBrand size={44} subtitle="Admin console" />
-          </div>
-
-          <form onSubmit={onSubmit} className="bp-card p-7 sm:p-8">
-            <div className="mb-7">
-              <h2 className="text-[1.45rem] font-extrabold tracking-tight text-bp-ink">Sign in</h2>
-              <p className="mt-1.5 text-sm leading-relaxed text-bp-muted">
-                Use your admin email and password to open the console.
-              </p>
-            </div>
-
-            {ticket ? (
-              <label className="block text-sm font-semibold text-bp-ink">
-                6-digit authenticator code
-                <input
-                  className="bp-input mt-2 text-center text-lg tracking-[0.4em]"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  autoFocus
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                  required
-                />
-              </label>
-            ) : null}
-
-            <label className={`block text-sm font-semibold text-bp-ink ${ticket ? "hidden" : ""}`}>
-              Email or username
-              <input
-                className="bp-input mt-2"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required={!ticket}
-                autoComplete="username"
-                placeholder="admin@aivora.dev"
-              />
-            </label>
-
-            <label className={`mt-4 block text-sm font-semibold text-bp-ink ${ticket ? "hidden" : ""}`}>
-              Password
-              <div className="relative mt-2">
-                <input
-                  className="bp-input pr-11"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required={!ticket}
-                  autoComplete="current-password"
-                  placeholder="Enter your password"
-                />
-                <button
-                  type="button"
-                  className="bp-icon-btn absolute top-1/2 right-1.5 -translate-y-1/2"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  onClick={() => setShowPassword((v) => !v)}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </label>
-
-            {error ? (
-              <p className="mt-4 text-sm font-medium text-red-600">{error}</p>
-            ) : null}
-
-            <Button className="mt-7 w-full" type="submit" disabled={busy}>
-              {busy ? "Signing in…" : "Sign in to console"}
-            </Button>
-
-          </form>
-
-          <section className="bp-card mt-4 p-6 sm:p-7">
-            <div className="flex gap-4">
-              <div className="flex h-[5.5rem] w-[5.5rem] shrink-0 items-center justify-center rounded-md border border-bp-border bg-gradient-to-b from-white to-[#f4f7f5]">
-                <AivoraLogo size={56} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <Smartphone size={16} className="shrink-0 text-bp-green" />
-                  <h3 className="text-[15px] font-bold tracking-tight text-bp-ink">Get the Android app</h3>
-                </div>
-                <p className="mt-1 text-sm leading-relaxed text-bp-muted">
-                  Scan or open the install link on a phone.
-                </p>
-                <p className="mt-0.5 text-xs font-medium text-bp-muted">
-                  Version {APP.androidVersion} · {APP.androidSize}
-                </p>
-              </div>
-            </div>
-
-            <div className="bp-mono mt-4 truncate rounded-[var(--radius-sm)] border border-bp-border bg-[#f7faf8] px-3 py-2.5 text-[11px] text-bp-muted">
-              {APP.downloadUrl}
-            </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-2.5">
-              <Button type="button" variant="secondary" className="w-full whitespace-nowrap" onClick={copyLink}>
-                <Copy size={15} />
-                {copied ? "Copied" : "Copy link"}
-              </Button>
-              <a href={APP.downloadUrl} className="bp-btn bp-btn-primary w-full whitespace-nowrap">
-                <Download size={15} />
-                Download APK
-              </a>
-            </div>
-          </section>
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(18,154,85,0.10),transparent_55%)]" />
+        <div className="relative w-full max-w-[420px]">
+          <div className="mb-7 lg:hidden"><AivoraBrand size={40} subtitle="Admin console" /></div>
+          <Suspense fallback={<div className="h-96 rounded-3xl border border-line bg-surface shadow-pop" />}>
+            <LoginForm />
+          </Suspense>
         </div>
       </div>
     </main>

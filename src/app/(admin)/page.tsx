@@ -1,241 +1,183 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { BackendHealthBanner } from "@/components/BackendHealthBanner";
-import { PageHeader, StatusBadge } from "@/components/ui";
-import { STORAGE_KEYS } from "@/config/constants";
+import { ArrowRight, Ban, Flag, KeyRound, MessageSquare, Phone, PhoneCall, UserPlus, Users, Wifi } from "lucide-react";
+import { Badge, Callout, Elapsed, Card, CardHeader, EmptyState, PageHeader, Person, StatCard } from "@/components/ui";
 import { useAdminCallsStream } from "@/hooks/useAdminCallsStream";
-import {
-  ApiError,
-  clearAdminSession,
-  fetchAdminMetrics,
-  fetchAdminOtps,
-  fetchAdminReports,
-  type AdminMetrics,
-  type AdminOtpItem,
-  type AdminReportItem,
-} from "@/lib/api";
+import { useNow } from "@/hooks/useNow";
+import { useQuery } from "@/hooks/useQuery";
+import { adminApi, type CallsSnapshot } from "@/lib/api";
+import { fmtNumber, humanize, timeAgo } from "@/lib/format";
+import { OTP_STATUS, callStatus, otpEffectiveStatus, otpPurpose } from "@/lib/status";
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function Breakdown({ rows }: { rows: { label: string; value: number | undefined }[] }) {
+  const total = rows.reduce((s, r) => s + (r.value ?? 0), 0);
   return (
-    <div className="bp-card p-5">
-      <div className="text-[13px] font-medium text-bp-muted">{label}</div>
-      <div className="mt-1.5 text-[1.65rem] font-extrabold tracking-tight text-bp-ink">{value}</div>
-    </div>
+    <ul className="space-y-3">
+      {rows.map((r) => {
+        const pct = total ? Math.round(((r.value ?? 0) / total) * 100) : 0;
+        return (
+          <li key={r.label}>
+            <div className="mb-1 flex items-center justify-between text-[13px]">
+              <span className="font-medium text-ink-soft">{r.label}</span>
+              <span className="font-semibold tabular-nums text-ink">{fmtNumber(r.value ?? 0)}</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
+              <div className="h-full rounded-full bg-brand transition-[width] duration-500" style={{ width: `${pct}%` }} />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function ViewAll({ href }: { href: string }) {
+  return (
+    <Link href={href} className="inline-flex items-center gap-1 text-[13px] font-semibold text-brand hover:text-brand-strong">
+      View all <ArrowRight size={14} />
+    </Link>
   );
 }
 
 export default function DashboardPage() {
-  const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
-  const [otps, setOtps] = useState<AdminOtpItem[]>([]);
-  const [reports, setReports] = useState<AdminReportItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [needsLogin, setNeedsLogin] = useState(false);
+  const now = useNow(30_000);
+  const metrics = useQuery("metrics", (s) => adminApi.metrics(s), { refreshMs: 30_000 });
+  const reports = useQuery("dash-reports", (s) => adminApi.reports.list("open", s), { refreshMs: 30_000 });
+  const otps = useQuery("dash-otps", (s) => adminApi.otps.list(s), { refreshMs: 15_000 });
+  const [calls, setCalls] = useState<CallsSnapshot | null>(null);
+  useAdminCallsStream((snap) => setCalls((prev) => ({ ...snap, calls_today: snap.calls_today >= 0 ? snap.calls_today : prev?.calls_today ?? -1 })), true);
 
-  const load = useCallback(async () => {
-    setError(null);
-    setNeedsLogin(false);
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-    if (!token) {
-      setNeedsLogin(true);
-      setError("Sign in again to load live metrics");
-      return;
-    }
-
-    const settled = await Promise.allSettled([
-      fetchAdminMetrics(token),
-      fetchAdminOtps(token),
-      fetchAdminReports(token, "open"),
-    ]);
-
-    const [m, o, r] = settled;
-    const unauthorized = settled.some(
-      (s) => s.status === "rejected" && s.reason instanceof ApiError && s.reason.status === 401,
-    );
-    if (unauthorized) {
-      clearAdminSession();
-      setNeedsLogin(true);
-      setError("Admin session expired — sign in again");
-      return;
-    }
-
-    if (m.status === "fulfilled") setMetrics(m.value);
-    if (o.status === "fulfilled") setOtps(o.value.items.slice(0, 6));
-    if (r.status === "fulfilled") setReports(r.value.items.slice(0, 6));
-
-    if (m.status === "rejected") {
-      const reason = m.reason instanceof Error ? m.reason.message : "metrics_failed";
-      setError(`Could not load metrics (${reason})`);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-    const t = window.setInterval(() => void load(), 30_000);
-    return () => window.clearInterval(t);
-  }, [load]);
-
-  useAdminCallsStream((snap) => {
-    setMetrics((m) =>
-      m
-        ? { ...m, calls_active: snap.calls_active, calls_today: snap.calls_today }
-        : {
-            users_total: 0,
-            users_banned: 0,
-            signups_today: 0,
-            messages_today: 0,
-            messages_last_7d: 0,
-            reports_open: 0,
-            conversations_total: 0,
-            calls_active: snap.calls_active,
-            calls_today: snap.calls_today,
-          },
-    );
-  });
-
-  const stats = metrics
-    ? [
-        { label: "Registered users", value: `${metrics.users_total}` },
-        { label: "Online now", value: `${metrics.users_online ?? 0}` },
-        { label: "Active calls", value: `${metrics.calls_active ?? 0}` },
-        { label: "Calls today", value: `${metrics.calls_today ?? 0}` },
-      ]
-    : [
-        { label: "Registered users", value: "—" },
-        { label: "Online now", value: "—" },
-        { label: "Active calls", value: "—" },
-        { label: "Calls today", value: "—" },
-      ];
+  const m = metrics.data;
+  const loading = metrics.loading;
+  const callsActive = calls?.calls_active ?? m?.calls_active ?? 0;
+  const callsToday = calls && calls.calls_today >= 0 ? calls.calls_today : m?.calls_today;
 
   return (
-    <div className="bp-page">
-      <PageHeader
-        title="Dashboard"
-        description="Live snapshot from the shared Aivora API — call counts update automatically."
-      />
+    <>
+      <PageHeader title="Dashboard" description="Live health of the platform. Numbers refresh on their own." />
 
-      <BackendHealthBanner />
+      {metrics.error ? <Callout tone="danger" className="mb-5">{metrics.error}</Callout> : null}
 
-      {error ? (
-        <div className="mb-3 rounded-[var(--radius)] border border-[#f0d4d4] bg-[#fff7f7] px-4 py-2.5 text-sm">
-          {error}
-          {needsLogin ? (
-            <>
-              {" "}
-              <Link href="/login" className="font-semibold text-bp-green underline">
-                Sign in
-              </Link>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((s) => (
-          <StatCard key={s.label} {...s} />
-        ))}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
+        <StatCard label="Users" icon={<Users size={18} />} loading={loading} value={fmtNumber(m?.users_total)} hint={`+${fmtNumber(m?.signups_today ?? 0)} today`} href="/users" />
+        <StatCard label="Online now" icon={<Wifi size={18} />} loading={loading} value={fmtNumber(m?.users_online ?? 0)} hint="Connected right now" accent="info" />
+        <StatCard label="Messages today" icon={<MessageSquare size={18} />} loading={loading} value={fmtNumber(m?.messages_today)} hint={`${fmtNumber(m?.messages_last_7d)} in the last 7 days`} />
+        <StatCard label="Open reports" icon={<Flag size={18} />} loading={loading} value={fmtNumber(m?.reports_open)} hint="Waiting for review" href="/reports" accent={m?.reports_open ? "danger" : "brand"} />
+        <StatCard label="Active calls" icon={<PhoneCall size={18} />} loading={loading} value={fmtNumber(callsActive)} hint={callsToday != null && callsToday >= 0 ? `${fmtNumber(callsToday)} calls today` : "Ringing or in progress"} href="/live" accent="warning" />
       </div>
 
-      <div className="bp-card mt-3 flex flex-wrap gap-6 px-4 py-3 text-sm" aria-label="Live">
-        <div>
-          <strong className="tabular-nums">{metrics?.signups_today ?? "—"}</strong>{" "}
-          <span className="text-bp-muted">signups today</span>
-        </div>
-        <div>
-          <strong className="tabular-nums">{metrics?.conversations_total ?? "—"}</strong>{" "}
-          <span className="text-bp-muted">chats</span>
-          <span className="text-bp-muted">
-            {" "}
-            ({metrics?.conversations_direct ?? 0} direct · {metrics?.conversations_groups ?? 0} groups)
-          </span>
-        </div>
-        <div>
-          <strong className="tabular-nums">{metrics?.conversations_disappearing ?? "—"}</strong>{" "}
-          <span className="text-bp-muted">disappearing on</span>
-        </div>
-        <div>
-          <strong className="tabular-nums">{metrics?.messages_media_today ?? "—"}</strong>{" "}
-          <span className="text-bp-muted">media today</span>
-        </div>
-        <div>
-          <strong className="tabular-nums">{metrics?.messages_voice_today ?? "—"}</strong>{" "}
-          <span className="text-bp-muted">voice today</span>
-        </div>
-        <div>
-          <strong className="tabular-nums">{metrics?.messages_polls_today ?? 0}</strong>/
-          <strong className="tabular-nums">{metrics?.messages_events_today ?? 0}</strong>{" "}
-          <span className="text-bp-muted">polls / events today</span>
-        </div>
-        <div>
-          <strong className="tabular-nums">{metrics?.users_banned ?? "—"}</strong>{" "}
-          <span className="text-bp-muted">banned</span>
-        </div>
-        <div>
-          <strong className="tabular-nums">{metrics?.messages_last_7d ?? "—"}</strong>{" "}
-          <span className="text-bp-muted">msgs (7d)</span>
-        </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <Card>
+          <CardHeader title="Conversations" description={`${fmtNumber(m?.conversations_total)} in total`} />
+          <div className="p-5">
+            <Breakdown
+              rows={[
+                { label: "Direct chats", value: m?.conversations_direct },
+                { label: "Groups", value: m?.conversations_groups },
+                { label: "With disappearing messages", value: m?.conversations_disappearing },
+              ]}
+            />
+          </div>
+        </Card>
+        <Card>
+          <CardHeader title="Today's message mix" description="Beyond plain text" />
+          <div className="p-5">
+            <Breakdown
+              rows={[
+                { label: "Photos, videos & files", value: m?.messages_media_today },
+                { label: "Voice notes", value: m?.messages_voice_today },
+                { label: "Polls", value: m?.messages_polls_today },
+                { label: "Events", value: m?.messages_events_today },
+              ]}
+            />
+          </div>
+        </Card>
+        <Card>
+          <CardHeader title="Accounts" description="Sign-ups and moderation" />
+          <div className="grid grid-cols-2 gap-3 p-5">
+            <div className="rounded-xl bg-brand-soft p-4">
+              <UserPlus size={18} className="text-brand" />
+              <div className="mt-2 text-2xl font-extrabold tabular-nums text-ink">{fmtNumber(m?.signups_today ?? 0)}</div>
+              <div className="text-xs font-medium text-muted">New today</div>
+            </div>
+            <Link href="/users?banned=1" className="rounded-xl bg-danger-soft p-4 transition-shadow hover:shadow-card">
+              <Ban size={18} className="text-danger" />
+              <div className="mt-2 text-2xl font-extrabold tabular-nums text-ink">{fmtNumber(m?.users_banned ?? 0)}</div>
+              <div className="text-xs font-medium text-muted">Banned</div>
+            </Link>
+          </div>
+        </Card>
       </div>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <div className="bp-card p-4">
-          <h2 className="mb-3 text-base font-semibold">Open reports</h2>
-          {reports.length === 0 ? (
-            <p className="text-sm text-bp-muted">No open reports.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {reports.map((r) => (
-                <li key={r.id} className="flex justify-between gap-3 border-b border-slate-100 py-1.5 last:border-0">
-                  <span className="truncate">
-                    {r.target_user?.phone ?? "Unknown"} — {r.reason || "No reason"}
-                  </span>
-                  <StatusBadge label={r.status} tone="yellow" />
+      <div className="mt-6 grid gap-6 xl:grid-cols-3">
+        <Card>
+          <CardHeader title="Open reports" icon={<Flag size={16} />} actions={<ViewAll href="/reports" />} />
+          {reports.data?.items.length ? (
+            <ul className="divide-y divide-line">
+              {reports.data.items.slice(0, 5).map((r) => (
+                <li key={r.id} className="px-5 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-[13px] font-semibold text-ink">{r.reason ? humanize(r.reason) : "No reason given"}</span>
+                    <span className="shrink-0 text-xs text-muted">{timeAgo(r.created_at, now)}</span>
+                  </div>
+                  <div className="mt-0.5 truncate text-xs text-muted">
+                    {r.target_user ? `Against ${r.target_user.display_name || r.target_user.phone}` : "Conversation report"} · by {r.reporter.display_name || r.reporter.phone}
+                  </div>
                 </li>
               ))}
             </ul>
+          ) : (
+            <EmptyState title={reports.loading ? "Loading…" : "Inbox zero"} description={reports.loading ? undefined : "No reports are waiting for review."} />
           )}
-        </div>
-        <div className="bp-card overflow-hidden">
-          <div className="border-b border-bp-border px-4 py-3 text-base font-semibold">
-            Recent OTP requests
-          </div>
-          <table className="bp-table">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Phone</th>
-                <th>Status</th>
-                <th>Attempts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {otps.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="text-bp-muted">
-                    No OTP requests yet.
-                  </td>
-                </tr>
-              ) : (
-                otps.map((o) => (
-                  <tr key={o.id}>
-                    <td>{new Date(o.created_at).toLocaleTimeString()}</td>
-                    <td className="text-bp-green">{o.phone}</td>
-                    <td>
-                      <StatusBadge
-                        label={o.status}
-                        tone={
-                          o.status === "Used" ? "green" : o.status === "Pending" ? "yellow" : "red"
-                        }
-                      />
-                    </td>
-                    <td>{o.attempts}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Live calls" icon={<Phone size={16} />} actions={<ViewAll href="/live" />} />
+          {calls?.items.length ? (
+            <ul className="divide-y divide-line">
+              {calls.items.slice(0, 5).map((c) => {
+                const st = callStatus(c.status);
+                const since = c.answered_at ?? c.started_at;
+                return (
+                  <li key={c.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                    <Person size={32} name={c.participants_label || c.initiator.display_name || c.initiator.phone} sub={`${humanize(c.media)} · ${c.kind === "group" ? "Group" : "1:1"}`} seed={c.id} />
+                    <div className="shrink-0 text-right">
+                      <Badge tone={st.tone} dot pulse>{st.label}</Badge>
+                      <div className="mt-0.5 text-xs tabular-nums text-muted"><Elapsed since={since} /></div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <EmptyState title="No calls right now" description="Calls show up here the moment they start ringing." />
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader title="Recent OTPs" icon={<KeyRound size={16} />} actions={<ViewAll href="/otps" />} />
+          {otps.data?.items.length ? (
+            <ul className="divide-y divide-line">
+              {otps.data.items.slice(0, 5).map((o) => {
+                const st = otpEffectiveStatus(o, now);
+                return (
+                  <li key={o.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-[13px] font-semibold text-ink">{o.phone}</div>
+                      <div className="text-xs text-muted">{otpPurpose(o.purpose)} · {timeAgo(o.created_at, now)}</div>
+                    </div>
+                    <Badge tone={OTP_STATUS[st].tone}>{st}</Badge>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <EmptyState title={otps.loading ? "Loading…" : "No codes yet"} description={otps.loading ? undefined : "Codes appear when someone signs in."} />
+          )}
+        </Card>
       </div>
-    </div>
+    </>
   );
 }

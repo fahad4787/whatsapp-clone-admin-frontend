@@ -1,105 +1,74 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Button, PageHeader } from "@/components/ui";
-import { STORAGE_KEYS } from "@/config/constants";
-import { fetchAdminLegal, putAdminLegal } from "@/lib/api";
+import { useMemo, useState } from "react";
+import { FileText, Scale } from "lucide-react";
+import { Callout, Card, CardToolbar, PageHeader, SaveBar, Segmented, Skeleton, Textarea } from "@/components/ui";
+import { useAction } from "@/hooks/useAction";
+import { useDraft } from "@/hooks/useDraft";
+import { useQuery } from "@/hooks/useQuery";
+import { adminApi, type LegalDocs } from "@/lib/api";
+import { cn } from "@/lib/cn";
+import { fmtNumber } from "@/lib/format";
+
+const MAX = 50_000;
+type Doc = keyof LegalDocs;
+const DOCS: Record<Doc, { label: string; icon: typeof FileText }> = {
+  privacy_policy: { label: "Privacy policy", icon: FileText },
+  terms_of_service: { label: "Terms of service", icon: Scale },
+};
 
 export default function LegalPage() {
-  const [privacy, setPrivacy] = useState("");
-  const [terms, setTerms] = useState("");
-  const [toast, setToast] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState<Doc>("privacy_policy");
+  const q = useQuery("legal", (s) => adminApi.legal.get(s));
+  const base = useMemo(() => (q.data ? { privacy_policy: q.data.privacy_policy, terms_of_service: q.data.terms_of_service } : null), [q.data]);
+  const { draft, set, reset, dirty } = useDraft(base);
+  const { run, isPending } = useAction();
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-      if (!token) {
-        setError("Sign in again");
-        return;
-      }
-      const data = await fetchAdminLegal(token);
-      setPrivacy(data.privacy_policy);
-      setTerms(data.terms_of_service);
-    } catch {
-      setError("Could not load legal documents");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const over = (Object.keys(DOCS) as Doc[]).find((k) => (draft?.[k].length ?? 0) > MAX);
+  const blocked = over ? `${DOCS[over].label} is over ${fmtNumber(MAX)} characters.` : null;
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const save = async () => {
+    if (!draft || blocked) return;
+    const res = await run("save", () => adminApi.legal.update(draft), { success: "Legal documents published", errorTitle: "Couldn't save" });
+    if (res) q.setData(res);
+  };
 
-  async function save() {
-    const token = localStorage.getItem(STORAGE_KEYS.adminToken);
-    if (!token) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const data = await putAdminLegal(token, {
-        privacy_policy: privacy,
-        terms_of_service: terms,
-      });
-      setPrivacy(data.privacy_policy);
-      setTerms(data.terms_of_service);
-      setToast("Legal documents saved");
-      window.setTimeout(() => setToast(null), 1800);
-    } catch {
-      setError("Save failed");
-    } finally {
-      setSaving(false);
-    }
-  }
-
+  const text = draft?.[tab] ?? "";
   return (
-    <div className="bp-page">
-      <PageHeader
-        title="Legal"
-        description="Copy shown in the Android Help → Terms / Privacy screens."
-        actions={
-          <Button onClick={() => void save()} disabled={saving || loading}>
-            {saving ? "Saving…" : "Save documents"}
-          </Button>
-        }
-      />
-      {toast ? (
-        <div className="mb-4 rounded-[var(--radius-sm)] border border-emerald-200 bg-bp-green-soft px-4 py-2.5 text-sm font-medium">
-          {toast}
-        </div>
-      ) : null}
-      {error ? (
-        <div className="mb-4 rounded-[var(--radius-sm)] border border-red-200 bg-red-50 px-4 py-2.5 text-sm">
-          {error}
-        </div>
-      ) : null}
-      {loading ? (
-        <p className="text-sm text-bp-muted">Loading…</p>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="bp-card p-4">
-            <h2 className="mb-2 font-semibold">Privacy policy</h2>
-            <textarea
-              className="bp-input min-h-48"
-              value={privacy}
-              onChange={(e) => setPrivacy(e.target.value)}
+    <>
+      <PageHeader title="Legal" description="Shown in the app under Settings → Help. Saving publishes right away." />
+      {q.error ? <Callout tone="danger" className="mb-4">{q.error}</Callout> : null}
+      <Card>
+        <CardToolbar className="justify-between">
+          <Segmented
+            label="Document"
+            value={tab}
+            onChange={setTab}
+            options={(Object.keys(DOCS) as Doc[]).map((k) => ({ value: k, label: `${DOCS[k].label}${dirty.includes(k) ? " •" : ""}` }))}
+          />
+          <span className={cn("text-xs tabular-nums", text.length > MAX ? "font-semibold text-danger" : "text-muted")}>
+            {fmtNumber(text.length)} / {fmtNumber(MAX)}
+          </span>
+        </CardToolbar>
+        <div className="p-4 sm:p-5">
+          {!draft ? (
+            <Skeleton className="h-[28rem] w-full" />
+          ) : (
+            <Textarea
+              key={tab}
+              aria-label={DOCS[tab].label}
+              value={text}
+              invalid={text.length > MAX}
+              onChange={(e) => set(tab, e.target.value)}
+              placeholder={`Write the ${DOCS[tab].label.toLowerCase()}…`}
+              className="min-h-[28rem] resize-y font-[inherit] text-[14px] leading-7"
+              spellCheck
             />
-          </div>
-          <div className="bp-card p-4">
-            <h2 className="mb-2 font-semibold">Terms of service</h2>
-            <textarea
-              className="bp-input min-h-48"
-              value={terms}
-              onChange={(e) => setTerms(e.target.value)}
-            />
-          </div>
+          )}
+          <p className="mt-3 text-xs text-muted">Plain text. Blank lines separate paragraphs. If a document is left empty, the app shows its title only.</p>
         </div>
-      )}
-    </div>
+      </Card>
+      <SaveBar count={dirty.length} saving={isPending("save")} blockedReason={blocked} onSave={() => void save()} onReset={reset} />
+    </>
   );
 }

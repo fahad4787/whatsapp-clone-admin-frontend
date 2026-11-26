@@ -117,7 +117,7 @@ export function AivoraBrand({
         <div className="min-w-0">
           <div
             className={`truncate text-[14px] font-extrabold tracking-tight ${
-              inverted ? "text-white" : "text-bp-ink"
+              inverted ? "text-white" : "text-ink"
             }`}
           >
             Aivora
@@ -125,7 +125,7 @@ export function AivoraBrand({
           {subtitle ? (
             <div
               className={`text-[10px] font-bold tracking-[0.08em] uppercase ${
-                inverted ? "text-white/55" : "text-bp-muted"
+                inverted ? "text-white/55" : "text-muted"
               }`}
             >
               {subtitle}
