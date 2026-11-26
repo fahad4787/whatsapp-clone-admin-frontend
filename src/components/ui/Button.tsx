@@ -7,7 +7,10 @@ export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "dang
 export type ButtonSize = "sm" | "md";
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-brand text-white shadow-xs hover:bg-brand-strong active:bg-brand-strong",
+  // Fill is the existing --brand-strong (#0b7a42): white label = 5.4:1 (AA). The
+  // lighter #129a55 only reached 3.4:1. Hover/press deepen the same hex.
+  primary:
+    "bg-brand-strong text-white shadow-xs hover:bg-[color-mix(in_oklab,var(--brand-strong)_86%,black)] active:bg-[color-mix(in_oklab,var(--brand-strong)_78%,black)]",
   secondary: "border border-line bg-surface text-ink shadow-xs hover:border-line-strong hover:bg-surface-muted",
   ghost: "text-ink-soft hover:bg-brand-soft hover:text-brand-text",
   danger: "bg-danger-solid text-white shadow-xs hover:bg-danger-solid-hover",
